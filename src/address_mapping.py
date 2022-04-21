@@ -2,7 +2,7 @@ import random
 from qgis.core import *
 from qgis.PyQt.QtCore import *
 
-def calculate_inhabitants(buildings, inhabitants):
+def calculate_inhabitants(buildings, inhabitants, region_name):
 
     keylist = ["house", "detached", "residential", "terrace"]
 
@@ -18,7 +18,7 @@ def calculate_inhabitants(buildings, inhabitants):
             if building["building"] in keylist:
                 flats_in_building = 1
             elif building["building"] == "apartments":
-                if building["building:flats"]:
+                if "building:flats" in building and building["building:flats"]:
                     flats_in_building = int(building["building:flats"])
                     continue
                 elif building["housenum_inside"] > 1:
@@ -36,7 +36,7 @@ def calculate_inhabitants(buildings, inhabitants):
             else:
                 flats_in_building = 0
             count += flats_in_building
-            building['flat_count'] = flats_in_building
+            building["flat_count"] = flats_in_building
             buildings.updateFeature(building)
         return count
         
@@ -45,9 +45,9 @@ def calculate_inhabitants(buildings, inhabitants):
         
         flat_count = 0
         for building in buildings.getFeatures():
-            if building['flat_count'] != NULL:
+            if building["flat_count"] != NULL:
                 #s = s + ar
-                flat_count += building['flat_count']
+                flat_count += building["flat_count"]
 
         flats_assign = [0] * flat_count
         for person in range(0, left_over):
@@ -57,17 +57,22 @@ def calculate_inhabitants(buildings, inhabitants):
         flat_index = 0
         for building in buildings.getFeatures():
             people_assigned = 0
-            if building['flat_count'] != NULL:
-                for flat_index_it in range(flat_index, building['flat_count'] + flat_index):
+            if building["flat_count"] != NULL:
+                for flat_index_it in range(flat_index, building["flat_count"] + flat_index):
                     people_assigned += flats_assign[flat_index_it]
-                building['pop'] = building['flat_count'] + people_assigned
+                building["pop"] = building["flat_count"] + people_assigned
                 buildings.updateFeature(building)
-                flat_index += building['flat_count']
-                count += building['flat_count'] + people_assigned
+                flat_index += building["flat_count"]
+                count += building["flat_count"] + people_assigned
 
     buildings.startEditing()
     count = add_address_count()
     asign_people_to_flats(inhabitants, count)
     buildings.commitChanges()
 
-    QgsVectorFileWriter.writeAsVectorFormat(buildings, "../out/buildings_ext_pop.gpkg", "UTF-8", buildings.crs())
+    QgsVectorFileWriter.writeAsVectorFormat(
+        buildings,
+        "../out/Population_"+str(region_name.replace("_", ""))+".gpkg",
+        "UTF-8",
+        buildings.crs()
+    )
