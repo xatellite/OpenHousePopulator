@@ -2,6 +2,7 @@ import random
 from qgis.core import *
 from qgis.PyQt.QtCore import *
 
+# ToDo: Define max, min flats + add building:levels support
 def calculate_inhabitants(buildings, inhabitants, region_name):
 
     keylist = ["house", "detached", "residential", "terrace"]

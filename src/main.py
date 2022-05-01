@@ -16,6 +16,8 @@ task = log_box("Starting Qgis")
 app = QgsApplication([],True, None)
 app.setPrefixPath("/usr", True)
 app.initQgis()
+
+# CHANGE PLUGIN FOLDERS HERE!
 sys.path.append("/usr/share/qgis/python/plugins")
 sys.path.append(os.path.expanduser("~") + "/.local/share/QGIS/QGIS3/profiles/default/python/plugins")
 
