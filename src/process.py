@@ -32,7 +32,7 @@ def process_district(district, inhabitants, centroid, silent=False):
     alg_params = {
       "KEY": key,
       "SERVER": "http://www.overpass-api.de/api/interpreter",
-      "TIMEOUT": 100,
+      "TIMEOUT": 300,
       "VALUE": "",
       "AREA": region_name,
     }
@@ -52,7 +52,7 @@ def process_district(district, inhabitants, centroid, silent=False):
   alg_params = {
     "POLYGONS": layer_buildings,
     "POINTS": layer_house_numbers,
-    "OUTPUT": "memory",
+    "OUTPUT": "../tmp/memory_"+district,
     "FIELD": "housenum_inside"
   }
   count_output = processing.run("native:countpointsinpolygon", alg_params)["OUTPUT"]
@@ -62,7 +62,7 @@ def process_district(district, inhabitants, centroid, silent=False):
 
   # Calculate inhabitants for building
   task = log_box("Calculating inhabitants", silent=silent)
-  buildings = calculate_inhabitants(layer_buildings_ext, inhabitants, district)
+  buildings = calculate_inhabitants(layer_buildings_ext, inhabitants)
   task.end()
 
   export_name = "../out/Population_"+str(district.replace("_", ""))
@@ -77,7 +77,12 @@ def process_district(district, inhabitants, centroid, silent=False):
       "UTF-8",
       buildings.crs()
     )
-    buildings = processing.run("native:centroids", {'INPUT':'../tmp/tmp.gpkg','ALL_PARTS':False,'OUTPUT':'memory:'})["OUTPUT"]
+    centroid_output = processing.run("native:centroids", {
+      'INPUT':'../tmp/tmp.gpkg',
+      'ALL_PARTS':False,
+      'OUTPUT': "../tmp/memory_" + district
+    })["OUTPUT"]
+    buildings = QgsVectorLayer(centroid_output, "buildings_ext", "ogr")
     task.end()
 
   x = datetime.datetime.now()
@@ -94,23 +99,31 @@ def process_district(district, inhabitants, centroid, silent=False):
   # cleanup
   os.remove(count_output)
 
+
+def process_list_entry(town_name, inhabitants, centroid):
+  try:
+    process_district(town_name, inhabitants, centroid)
+  except:
+    with open("../tmp/error.csv", "a") as error_file:
+      csv_writer = csv.writer(error_file)
+      csv_writer.writerow([town_name, inhabitants])
+      error_file.close()
+    return
+
+
 def process_list(list, centroid):
+  directories = os.listdir("../out")
+  present_districts = []
+  for file in directories:
+    present_districts.append(file.split("_")[1])
+
   with open(list, newline='') as csvfile:
     csv_reader = csv.reader(csvfile, delimiter=',', quotechar='"')
     for index, row in enumerate(csv_reader):
-      message = "Processing:" + str(index) + "of" # + str(len(list(csv_reader)))
-      progress_log = log_box(message)
       town_name = row[0].split(",")[0].split("(")[0]
-      inhabitants = int(row[1].replace(" ", ""))
-      print(town_name, inhabitants)
-      try:
-        process_district(town_name, inhabitants, centroid)
-      except:
-        with open("./tmp/error.csv", "a") as error_file:
-          csv_writer = csv.writer(error_file)
-          csv_writer.writerow([town_name, inhabitants])
-          error_file.close()
-        progress_log.end(status="FAILED", color="RED")
+      if town_name in present_districts:
         continue
-      progress_log.end()
+      inhabitants = int(row[1].replace(" ", ""))
+      process_list_entry(town_name, inhabitants, centroid) 
+    csvfile.close()
 
