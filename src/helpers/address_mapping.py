@@ -6,12 +6,11 @@ from qgis.PyQt.QtCore import *
 def calculate_inhabitants(buildings, inhabitants, region_name):
 
     keylist = ["house", "detached", "residential", "terrace"]
-
+        
     building_provider = buildings.dataProvider()
     building_provider.addAttributes([QgsField("flat_count",QVariant.Int)])
     building_provider.addAttributes([QgsField("pop", QVariant.Double, "double", 10, 4)])
     buildings.updateFields()
-
 
     def add_address_count():
         count = 0
@@ -71,9 +70,9 @@ def calculate_inhabitants(buildings, inhabitants, region_name):
     asign_people_to_flats(inhabitants, count)
     buildings.commitChanges()
 
-    QgsVectorFileWriter.writeAsVectorFormat(
-        buildings,
-        "../out/Population_"+str(region_name.replace("_", ""))+".gpkg",
-        "UTF-8",
-        buildings.crs()
-    )
+    # Reducing Attributes - Remove if you need default osm attributes
+    building_provider = buildings.dataProvider()
+    indexes = building_provider.attributeIndexes()
+    building_provider.deleteAttributes(indexes[1:-2])
+    buildings.updateFields()
+    return buildings
