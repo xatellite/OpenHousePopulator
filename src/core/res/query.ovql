@@ -1,0 +1,11 @@
+[out:json][timeout:25];
+area[name="{{area}}"];
+
+(
+  {{type}}["{{tag}}"](area);
+);
+
+out body;
+>;
+out skel qt;
+

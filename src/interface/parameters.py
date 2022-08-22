@@ -1,0 +1,6 @@
+REROLL_THRESHOLD = 3
+REROLL_PROBABILITY = 90
+LEVEL_FACTOR = 2
+HOUSENUMBER_FACTOR = 2
+LEVEL_THRESHOLD = 3
+OVERPASS_ENDPOINT = "https://maps.mail.ru/osm/tools/overpass/api/interpreter"
