@@ -46,15 +46,24 @@ fn unfold_housenumber(house_number: String, mut house_numbers: Vec<String>) -> V
   split_numbers.iter().for_each(|house_number| {
     let house_number_range: Vec<&str> = house_number.split("-").collect();
     let mut house_numbers_to_add: Vec<String> = vec![];
+
+    // Handle more than two numbers
     if house_number_range.len() > 2 {
       house_numbers_to_add.push(house_number.to_string());
     }
+    // Handle exactly two
     else if house_number_range.len() > 1 {
       let first_number_part: Vec<&str> = house_number_range[0].split("/").collect();
-      let first_number = first_number_part[first_number_part.len()].parse::<usize>().unwrap_or(0);
-
+      let mut first_number = house_number_range[0].parse::<usize>().unwrap_or(0);
+      if (first_number_part.len() > 2) {
+        println!("{}",house_number);
+        first_number = first_number_part[first_number_part.len() - 1].parse::<usize>().unwrap_or(0);
+      }
       let last_number_part: Vec<&str> = house_number_range[1].split("/").collect();
-      let last_number = last_number_part[last_number_part.len()].parse::<usize>().unwrap_or(0);
+      let mut last_number = house_number_range[1].parse::<usize>().unwrap_or(0);
+      if (last_number_part.len() > 2) {
+        last_number = last_number_part[last_number_part.len() - 1].parse::<usize>().unwrap_or(0);
+      }
       let range = first_number..last_number + 1;
       // ToDo Handle Range
       for item in range {
@@ -238,7 +247,7 @@ pub fn count_inhabitants(buildings: OverpassResponse, house_numbers: OverpassRes
   let geojson = write_polygons_to_geojson(building_polygons, apply_centroid);
   
   // Create a temporary file.
-  let temp_directory = PathBuf::from("../../out/");
+  let temp_directory = PathBuf::from("./out/");
   let file_name = district.to_string() + ".geojson";
   let temp_file = temp_directory.join(&file_name);
 
