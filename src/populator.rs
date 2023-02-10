@@ -13,20 +13,7 @@ use std::{collections::HashMap};
 
 use crate::overpass::OverpassResponse;
 use crate::Config;
-
-fn prepare_polygons(buildings: &OverpassResponse) -> Vec<(Polygon, HashMap<String, String>)> {
-  let mut building_polygons = vec![];
-  // ToDo filter attributes
-  // let single_home_list: [&str] = ["building", "building:levels", "building:flats", "leisure", "amenity", "emergency", "addr:housenumber", "housenum_inside"];
-  for (_id, element) in buildings {
-      if element.element_type == "way" {
-          let coords: Vec<(f64,f64)> = element.nodes.clone().expect("Way without nodes").iter().map(|child| (buildings[child].lng.unwrap(), buildings[child].lat.unwrap())).collect();
-          let line_string = geo::LineString::from(coords);
-          building_polygons.push((Polygon::new(line_string, vec![]), element.tags.clone().unwrap_or(HashMap::new())));
-      }
-  }
-  building_polygons
-}
+use crate::geometry::prepare_polygons_from_way;
 
 fn prepare_points(house_numbers: OverpassResponse) ->  Vec<(String, geo::Point)> {
   // Filter non house number entries
@@ -55,13 +42,12 @@ fn unfold_housenumber(house_number: String, mut house_numbers: Vec<String>) -> V
     else if house_number_range.len() > 1 {
       let first_number_part: Vec<&str> = house_number_range[0].split("/").collect();
       let mut first_number = house_number_range[0].parse::<usize>().unwrap_or(0);
-      if (first_number_part.len() > 2) {
-        println!("{}",house_number);
+      if first_number_part.len() > 2 {
         first_number = first_number_part[first_number_part.len() - 1].parse::<usize>().unwrap_or(0);
       }
       let last_number_part: Vec<&str> = house_number_range[1].split("/").collect();
       let mut last_number = house_number_range[1].parse::<usize>().unwrap_or(0);
-      if (last_number_part.len() > 2) {
+      if last_number_part.len() > 2 {
         last_number = last_number_part[last_number_part.len() - 1].parse::<usize>().unwrap_or(0);
       }
       let range = first_number..last_number + 1;
@@ -109,7 +95,7 @@ fn write_polygons_to_geojson(building_polygons: Vec<(Polygon, HashMap<String, St
     }
 
     let geojson_geomentry;
-    // ToDo: centroid
+
     if apply_centroid {
       let point = geometry.centroid().expect("not a centroid");
       geojson_geomentry = Some(geojson::Geometry::from(&point));
@@ -138,7 +124,7 @@ fn write_polygons_to_geojson(building_polygons: Vec<(Polygon, HashMap<String, St
 
 pub fn count_inhabitants(buildings: OverpassResponse, house_numbers: OverpassResponse, mut inhabitants: u64, district: &str, apply_centroid: bool, config: &Config) -> std::io::Result<()>{
 
-  let mut building_polygons = prepare_polygons(&buildings);
+  let mut building_polygons = prepare_polygons_from_way(&buildings);
   let house_number_points = prepare_points(house_numbers);
 
   // Count house numbers inside building
@@ -170,7 +156,7 @@ pub fn count_inhabitants(buildings: OverpassResponse, house_numbers: OverpassRes
         total_flats += flat_count;
         continue;
       } else if house_numbers >= 1 {
-        flat_count = building_polygon.1["housenumbers"].parse::<usize>().unwrap() * config.HOUSENUMBER_FACTOR;
+        flat_count = building_polygon.1["housenumbers"].parse::<usize>().unwrap() * config.housenumber_factor;
       } else {
         flat_count = 1;
       }
@@ -194,9 +180,9 @@ pub fn count_inhabitants(buildings: OverpassResponse, house_numbers: OverpassRes
 
     if building_polygon.1.contains_key("building:levels") {
       let levels: usize = building_polygon.1["building:levels"].parse::<usize>().unwrap();
-      if levels > config.LEVEL_THRESHOLD {
+      if levels > config.level_threshold {
         flat_count += building_polygon.1["building:levels"].parse::<usize>().unwrap() - 4;
-        flat_count *= config.LEVEL_FACTOR;
+        flat_count *= config.level_factor;
       }
     }
 
@@ -212,7 +198,7 @@ pub fn count_inhabitants(buildings: OverpassResponse, house_numbers: OverpassRes
 
   while inhabitants > 0 {
     let flat_index: usize = rand::thread_rng().gen_range(0..total_flats - 1);
-    if flat_inhabitants[flat_index] > config.REROLL_THRESHOLD && rand::thread_rng().gen_range(0..config.REROLL_PROBABILITY) > config.REROLL_THRESHOLD {
+    if flat_inhabitants[flat_index] > config.reroll_threshold && rand::thread_rng().gen_range(0..config.reroll_probability) > config.reroll_threshold {
       continue;
     }
     flat_inhabitants[flat_index] += 1;

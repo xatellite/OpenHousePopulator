@@ -1,0 +1,6 @@
+level_threshold = 3
+reroll_threshold = 90
+reroll_probability = 2
+level_factor = 2
+housenumber_factor = 3
+request_url = "https://maps.mail.ru/osm/tools/overpass/api/interpreter"

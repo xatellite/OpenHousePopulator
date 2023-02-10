@@ -1,20 +1,18 @@
 [package]
-name = "openhousepopulator_core"
-version = "0.1.0"
+name = "openhousepopulator"
+version = "0.2.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-[lib]
-name = "openhousepopulator_core"
-crate-type = ["cdylib"]
 
 [dependencies]
+clap = { version = "4.1.4", features = ["derive"] }
+config = "0.13.3"
 futures = "0.3.21"
 geo = "0.22.1"
 geo-types = "0.7.6"
 geojson = "0.23.0"
 handlebars = "4.3.3"
-pyo3 = { version = "0.16.5", features = ["extension-module"] }
 rand = "0.8.5"
 reqwest = { version = "0.11.11", features = ["blocking", "json"] }
 serde = { version = "1.0", features = ["derive"] }

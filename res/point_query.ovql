@@ -1,0 +1,9 @@
+[out:json][timeout:25];
+is_in({{lat}},{{lng}}) -> .a;
+(
+  {{type}}[{{tag}}](pivot.a);
+);
+
+out body;
+>;
+out skel qt;
