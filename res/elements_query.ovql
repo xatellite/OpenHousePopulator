@@ -1,8 +1,8 @@
 [out:json][timeout:25];
-area[name="{{area}}"];
+area[name="{{{area}}}"];
 
 (
-  {{type}}["{{tag}}"](area);
+  {{{type}}}["{{tag}}}"](area);
 );
 
 out body;

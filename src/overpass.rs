@@ -51,8 +51,10 @@ pub async fn query_overpass_elements(area_name: &str, tag_name: &str, element_ty
 pub async fn query_overpass_point(lat: &f32, lng: &f32, tag_name: &str, element_type: &str, config: &Config) -> reqwest::Result<OverpassResponse> {
   let contents = fs::read_to_string(POINT_QUERY_FILENAME).expect("Query file could not be read");
   let reg = Handlebars::new();
+
   let request_body = reg.render_template(&contents, &json!({"lng": lng.to_string(), "lat": lat.to_string(), "tag": tag_name, "type": element_type})).expect("Something went wrong formatting");
 
+  print!("{}", request_body);
   let response = send_overpass_request(request_body, config).await
     .expect("Overpass response could not be retrieved.");
   Ok(response)
@@ -60,7 +62,7 @@ pub async fn query_overpass_point(lat: &f32, lng: &f32, tag_name: &str, element_
 
 pub async fn send_overpass_request(request_body: String, config: &Config) -> reqwest::Result<OverpassResponse> {
   let client = Client::new();
-  let response = client.post(&config.request_url).body(request_body).send().expect("Overpass endpoint did not respond");
+  let response = client.post(&config.request_url).body(request_body).send().expect("Overpass endpoint did not respond").error_for_status()?;
 
   let raw_response: RawOverpassResponse = response.json().expect("JSON parsing failed");
 

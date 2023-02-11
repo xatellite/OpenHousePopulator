@@ -1,10 +1,6 @@
 use rand::prelude::*;
 use geo::Polygon;
 use geo::Contains;
-use geo::Centroid;
-use geojson::GeoJson;
-use geojson::Feature;
-use geojson::FeatureCollection;
 use std::path::PathBuf;
 use std::fs::File;
 use std::io::Write;
@@ -13,7 +9,7 @@ use std::{collections::HashMap};
 
 use crate::overpass::OverpassResponse;
 use crate::Config;
-use crate::geometry::prepare_polygons_from_way;
+use crate::geometry::{prepare_polygons_from_way, write_polygons_to_geojson};
 
 fn prepare_points(house_numbers: OverpassResponse) ->  Vec<(String, geo::Point)> {
   // Filter non house number entries
@@ -83,44 +79,6 @@ fn count_points_inside(building_polygons: &mut Vec<(Polygon, HashMap<String, Str
     building_polygon.1.insert("housenumbers".to_string(), house_numbers.len().to_string());
   }
 }
-
-fn write_polygons_to_geojson(building_polygons: Vec<(Polygon, HashMap<String, String>)>, apply_centroid: bool) -> GeoJson {
-  
-  let mut features = vec![];
-
-  for (geometry, tags) in building_polygons {
-    let mut tags_map = serde_json::Map::new();
-    for (key,value) in tags {
-      tags_map.insert(key, serde_json::to_value(value).unwrap());
-    }
-
-    let geojson_geomentry;
-
-    if apply_centroid {
-      let point = geometry.centroid().expect("not a centroid");
-      geojson_geomentry = Some(geojson::Geometry::from(&point));
-    } else {
-      geojson_geomentry = Some(geojson::Geometry::from(&geometry));
-    }
-
-    let feature = Feature {
-      bbox: None,
-      geometry: geojson_geomentry,
-      id: None,
-      // See the next section about Feature properties
-      properties: Some(tags_map),
-      foreign_members: None,
-    };
-    features.push(feature);
-  }
-
-  GeoJson::from(FeatureCollection {
-    bbox: None,
-    features: features,
-    foreign_members: None,
-  })
-}
-
 
 pub fn count_inhabitants(buildings: OverpassResponse, house_numbers: OverpassResponse, mut inhabitants: u64, district: &str, apply_centroid: bool, config: &Config) -> std::io::Result<()>{
 
@@ -230,7 +188,7 @@ pub fn count_inhabitants(buildings: OverpassResponse, house_numbers: OverpassRes
     building_polygon.1 = filtered_tags;
   }
 
-  let geojson = write_polygons_to_geojson(building_polygons, apply_centroid);
+  let geojson = write_polygons_to_geojson(&building_polygons, apply_centroid);
   
   // Create a temporary file.
   let temp_directory = PathBuf::from("./out/");
