@@ -8,11 +8,14 @@ edition = "2021"
 [dependencies]
 clap = { version = "4.1.4", features = ["derive"] }
 config = "0.13.3"
+either = "1.8.1"
 futures = "0.3.21"
 geo = "0.22.1"
 geo-types = "0.7.6"
 geojson = "0.23.0"
 handlebars = "4.3.3"
+nom = "7.1.3"
+osmpbfreader = "0.16.0"
 rand = "0.8.5"
 reqwest = { version = "0.11.11", features = ["blocking", "json"] }
 serde = { version = "1.0", features = ["derive"] }

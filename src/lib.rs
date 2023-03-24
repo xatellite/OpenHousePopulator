@@ -1,14 +1,35 @@
-mod overpass;
-mod populator;
+//! # OpenHousePopulator
+//!
+//! This tool automatically distributes a given amount of inhabitants to osm buildings.
+//! The calculation is based on predefined heuristics, calculating a flat count per building and randomly distributing people.
+
 mod geometry;
-use std::io::Write;
+mod datalayer;
+mod parser;
 
-use std::{collections::HashMap, path::PathBuf, fs::File};
-
-use futures::executor::block_on;
+use std::fmt::Display;
+use std::path::Path;
+use datalayer::{is_building, is_housenumber_node, load_buildings};
 use geo::Polygon;
+use crate::geometry::{write_polygons_to_geojson};
 
-use crate::geometry::{prepare_polygons_from_relation, write_polygons_to_geojson};
+#[derive(Debug)]
+pub enum Error {
+    OverpassError(reqwest::Error),
+    IOError(std::io::Error),
+}
+
+impl Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::OverpassError(err) => write!(f, "failed to query overpass api: {}", err),
+            Self::IOError(err) => write!(f, "io error occured: {}", err),
+            _ => write!(f, "some error occured"),
+        }
+    }
+}
+
+impl std::error::Error for Error {}
 
 #[derive(Clone, serde::Deserialize)]
 pub struct Config {
@@ -20,54 +41,22 @@ pub struct Config {
     pub request_url: String,
 }
 
-pub fn get_area_by_point(lat: &f32, lng: &f32, config: &Config) -> Result<Vec<(Polygon, HashMap<String, String>)>, ()> {
-    let areas = match block_on(overpass::query_overpass_point(lat, lng, "admin_level=8", "rel", config)) {
-        Ok(result) => result,
-        Err(error) => panic!("{}", error)
-    };
+/// Takes pbf and inhabitants count and calculates geojson
+pub fn spread_population(
+    file: &Path,
+    inhabitants: &u64,
+    centroid: &bool,
+    config: &Config,
+) -> Result<(), Error> {
 
-    print!("{:?}\n", areas.len());
+  // Read pbf file
 
-    let polygons = prepare_polygons_from_relation(&areas);
-    let geojson = write_polygons_to_geojson(&polygons, false);
+    let r = std::fs::File::open(file).map_err(|err| Error::IOError((err)))?; // ToDo Handle error
+    let mut pbf = osmpbfreader::OsmPbfReader::new(r);
 
-    let temp_directory = PathBuf::from("./out/");
-    let file_name = polygons.get(0).unwrap().1["name"].clone() + "_location.geojson";
-    let temp_file = temp_directory.join(&file_name);
-  
-    let mut file = File::create(temp_file).unwrap();
-    write!(file, "{}", geojson.to_string());
-
-    // Collect result hashmap
-    // let mut result_map = HashMap::new();
-
-
-    // for (_, area) in areas.iter() {
-    //     if area.tags.is_some() {
-    //         let keys = area.tags.as_ref().unwrap();
-    //         if keys.contains_key("admin_level") &&  keys.contains_key("name"){
-    //             result_map.insert(keys["name"].clone(), keys["admin_level"].parse::<u32>().unwrap());
-    //             // Save outline to file
-
-    //         }
-    //     }
-    // }
-
-    // print!("{:?}\n", result_map);
-    // return result
-    Ok(polygons)
-}
-
-pub fn spread_population(district: &str, inhabitants: u64, centroid: bool, config: &Config) -> Result<(), std::io::Error> {
-  let buildings = match block_on(overpass::query_overpass_elements(district, "building", "area", config)) {
-      Ok(result) => result,
-      Err(error) => panic!("{}", error)
-  };
-
-  let house_numbers = match block_on(overpass::query_overpass_elements(district, "addr:housenumber", "node", config)) {
-      Ok(result) => result,
-      Err(error) => panic!("{}", error)
-  };
-
-  return populator::count_inhabitants(buildings, house_numbers, inhabitants, district, centroid, config);
+    let osm_buildings = pbf.get_objs_and_deps(is_building).unwrap();
+    let osm_housenumbers = pbf.get_objs_and_deps(is_housenumber_node).unwrap();
+    let buildings = load_buildings(osm_buildings, osm_housenumbers);
+    // println!("{:?}", buildings);
+    Ok(())
 }

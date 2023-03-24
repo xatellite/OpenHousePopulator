@@ -2,7 +2,7 @@
 area[name="{{{area}}}"];
 
 (
-  {{{type}}}["{{tag}}}"](area);
+  {{{type}}}["{{{tag}}}"](area);
 );
 
 out body;
