@@ -1,7 +1,7 @@
 use itertools::Itertools;
 use nom::{
     branch::alt,
-    character::complete::{alpha0, char, digit1, multispace0},
+    character::complete::{alpha0, char, digit1, multispace0, alpha1},
     combinator::complete,
     multi::separated_list1,
     sequence::{delimited, pair, separated_pair},
@@ -12,20 +12,23 @@ use std::{collections::HashSet, error, fmt::Display};
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum HouseNumber {
     Single(SingleHouseNumber),
+    Subdivided(Subdivisions),
     Range(SingleHouseNumber, SingleHouseNumber),
 }
 
 impl HouseNumber {
-    pub fn count(&self) -> u16 {
+    pub fn count(&self) -> usize {
         match self {
             HouseNumber::Single(_) => 1,
-            HouseNumber::Range(hn1, hn2) => hn2.0 - hn1.0,
+            HouseNumber::Subdivided(sdv) => sdv.count(),
+            HouseNumber::Range(hn1, hn2) => (hn2.0 - hn1.0).into(),
         }
     }
 
     fn singles(&self) -> Vec<SingleHouseNumber> {
         match self {
             HouseNumber::Single(hn) => vec![hn.to_owned()],
+            HouseNumber::Subdivided(sdv) => sdv.singles(),
             HouseNumber::Range(hn1, hn2) => (hn1.0..hn2.0)
                 .map(|e| SingleHouseNumber(e, String::new()))
                 .collect(),
@@ -37,6 +40,7 @@ impl Display for HouseNumber {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             HouseNumber::Single(hn) => write!(f, "{}", hn),
+            HouseNumber::Subdivided(sdv) => write!(f, "{}", sdv),
             HouseNumber::Range(hn1, hn2) => write!(f, "{}-{}", hn1, hn2),
         }
     }
@@ -48,6 +52,24 @@ pub struct SingleHouseNumber(u16, String);
 impl Display for SingleHouseNumber {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}{}", self.0, self.1)
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Subdivisions(u16, Vec<String>);
+
+impl Subdivisions {
+  fn count(&self) -> usize {
+    self.1.len()
+  }
+  fn singles(&self) -> Vec<SingleHouseNumber> {
+    self.1.iter().map(|e| SingleHouseNumber(self.0, e.clone())).collect()
+  }
+}
+
+impl Display for Subdivisions {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} {}", self.0, self.1.join("/"))
     }
 }
 
@@ -115,8 +137,22 @@ pub fn house_number(input: &str) -> IResult<&str, HouseNumber> {
 }
 
 pub fn wrapped_housenumber(input: &str) -> IResult<&str, HouseNumber> {
+    alt((wrapped_subdivided_housenumber, wrapped_single_housenumber))(input)
+}
+
+pub fn wrapped_single_housenumber(input: &str) -> IResult<&str, HouseNumber> {
     let (rest, housenumber) = single_housenumber(input)?;
     Ok((rest, HouseNumber::Single(housenumber)))
+}
+
+pub fn wrapped_subdivided_housenumber(input: &str) -> IResult<&str, HouseNumber> {
+  let (rest, housenumber) = subdivided_housenumber(input)?;
+  Ok((rest, HouseNumber::Subdivided(housenumber)))
+}
+
+pub fn subdivided_housenumber(input: &str) -> IResult<&str, Subdivisions> {
+    let (rest, (number, letters)) = pair(digit1, ws(separated_list1(char('/'), alpha1)))(input)?;
+    Ok((rest, Subdivisions(number.parse().unwrap_or_default(), letters.iter().map(|e| e.to_string()).collect())))
 }
 
 pub fn single_housenumber(input: &str) -> IResult<&str, SingleHouseNumber> {
