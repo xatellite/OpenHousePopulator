@@ -98,7 +98,7 @@ pub fn load_buildings(
 
     let osm_housenumber_nodes: BTreeMap<NodeId, Node> = osm_housenumber
         .into_iter()
-        .filter_map(|(key, obj)| match obj {
+        .filter_map(|(_, obj)| match obj {
             OsmObj::Node(inner) => Some(inner),
             _ => None,
         })
@@ -122,24 +122,21 @@ pub fn load_buildings(
             let line_string = geo::LineString::from(coords);
             let polygon = Polygon::new(line_string, vec![]).convex_hull();
             Building {
-                polygon: polygon,
+                polygon,
                 tags: obj.tags,
             }
         })
         .collect();
 
     let housenumbers: Vec<HouseNumberPoint> = osm_housenumber_nodes
-        .iter()
-        .map(|(_, obj)| {
+        .values()
+        .map(|obj| {
             let point = Point::new(
                 obj.decimicro_lat as f64 / 10000000.,
                 obj.decimicro_lon as f64 / 10000000.,
             );
             let text = obj.tags["addr:housenumber"].to_string();
-            HouseNumberPoint {
-                point: point,
-                text: text,
-            }
+            HouseNumberPoint { point, text }
         })
         .collect();
     // Calculate house number count

@@ -19,7 +19,7 @@ pub fn write_polygons_to_geojson(
             tags_map.insert(key.clone(), value.clone());
         }
 
-        let mut geojson_geomentry;
+        let geojson_geomentry;
 
         if apply_centroid {
             let point = geometry.centroid().expect("not a centroid");
@@ -40,7 +40,7 @@ pub fn write_polygons_to_geojson(
 
     GeoJson::from(FeatureCollection {
         bbox: None,
-        features: features,
+        features,
         foreign_members: None,
     })
 }

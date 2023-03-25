@@ -27,7 +27,6 @@ impl HouseNumber {
         match self {
             HouseNumber::Single(hn) => vec![hn.to_owned()],
             HouseNumber::Range(hn1, hn2) => (hn1.0..hn2.0)
-                .into_iter()
                 .map(|e| SingleHouseNumber(e, String::new()))
                 .collect(),
         }
@@ -53,7 +52,7 @@ impl Display for SingleHouseNumber {
 }
 
 #[derive(Default, Debug)]
-pub struct HouseNumberList(HashSet<HouseNumber>);
+pub struct HouseNumberList(HashSet<SingleHouseNumber>);
 
 impl HouseNumberList {
     pub fn merge(&mut self, other: HouseNumberList) {
@@ -66,18 +65,18 @@ impl HouseNumberList {
 }
 
 impl HouseNumberList {
-    pub fn count(&self) -> u16 {
-        self.0.iter().map(|elem| elem.count()).sum()
-    }
-
-    pub fn unique(&self) -> HashSet<SingleHouseNumber> {
-        self.0.iter().flat_map(|e| e.singles()).collect()
+    pub fn count(&self) -> usize {
+        self.0.len()
     }
 }
 
 impl Display for HouseNumberList {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0.iter().map(|e| e.to_string()).join("/"))
+        write!(
+            f,
+            "{}",
+            self.0.iter().map(|e| e.to_string()).sorted().join("/")
+        )
     }
 }
 
@@ -85,8 +84,8 @@ impl<'a> TryFrom<&'a str> for HouseNumberList {
     type Error = ParseError<'a>;
 
     fn try_from(input: &'a str) -> Result<Self, Self::Error> {
-        let (rest, value) = housenumber_list(input).map_err(|err| ParseError::NomError(err))?;
-        if rest != "" {
+        let (rest, value) = housenumber_list(input).map_err(ParseError::NomError)?;
+        if !rest.is_empty() {
             return Err(ParseError::NotFullyConsumedError(input, rest));
         }
         Ok(value)
@@ -136,7 +135,10 @@ pub fn housenumber_range(input: &str) -> IResult<&str, HouseNumber> {
 
 pub fn housenumber_list(input: &str) -> IResult<&str, HouseNumberList> {
     let (rest, list) = separated_list1(list_delimiter, house_number)(input)?;
-    Ok((rest, HouseNumberList(list.into_iter().collect())))
+    Ok((
+        rest,
+        HouseNumberList(list.into_iter().flat_map(|e| e.singles()).collect()),
+    ))
 }
 
 pub fn list_delimiter(input: &str) -> IResult<&str, char> {
