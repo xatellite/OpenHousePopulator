@@ -1,51 +1,52 @@
 use std::{fmt::Display, error};
-use nom::{IResult, branch::alt, character::{complete::{digit1, alpha0}, streaming::char}, sequence::{ pair, separated_pair}, multi::{separated_list1}};
+use nom::{IResult, branch::alt, character::{complete::{digit1, alpha0, multispace0, char}}, sequence::{ pair, separated_pair, delimited}, multi::separated_list1, combinator::complete};
 
 pub trait CountableHouseNumber {
   fn count(&self) -> u16;
   fn list_unique(&self) -> Vec<String>;
-  fn house_number(&self) -> u16 {
-    0
-  }
 }
 
-struct HouseNumber(u16, String);
+#[derive(Debug)]
+pub enum HouseNumber {
+  Single(SingleHouseNumber),
+  Range(SingleHouseNumber, SingleHouseNumber)
+}
 
 impl CountableHouseNumber for HouseNumber {
-    fn count(&self) -> u16 {
-        1
-    }
-    fn list_unique(&self) -> Vec<String> {
-      let full_text = (self.0.to_string() + self.1.as_str());
-      vec![full_text]
-    }
-    fn house_number(&self) -> u16 {
-        self.0
-    }
-}
-
-struct HouseNumberRange(Box<dyn CountableHouseNumber>, Box<dyn CountableHouseNumber>);
-
-impl CountableHouseNumber for HouseNumberRange {
   fn count(&self) -> u16 {
-      self.1.house_number() - self.0.house_number()
+    match self {
+        HouseNumber::Single(_) => 1,
+        HouseNumber::Range(hn1, hn2) => hn2.0 - hn1.0,
+    }
   }
 
   fn list_unique(&self) -> Vec<String> {
-    (self.1.house_number()..self.0.house_number()).into_iter().map(|elem| elem.to_string()).collect()
+    match self {
+        HouseNumber::Single(hn) => vec![hn.to_string()],
+        HouseNumber::Range(hn1, hn2) => (hn1.0..hn2.0).into_iter().map(|e| e.to_string()).collect(),
+    }
   }
 }
 
-#[derive(Default)]
+#[derive(Debug)]
+pub struct SingleHouseNumber(u16, String);
+
+impl Display for SingleHouseNumber {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}{}", self.0, self.1)
+    }
+}
+
+#[derive(Default, Debug)]
 pub struct HouseNumberList (
-  Vec<Box<dyn CountableHouseNumber>>
+  Vec<HouseNumber>
 );
 
 impl HouseNumberList {
   // ToDo Test this!
   pub fn merge(&mut self, other: HouseNumberList) {
     self.0.extend(other.0);
-    self.0.dedup_by_key(|elem| elem.house_number())
+   // self.0.dedup_by_key(|elem| elem.house_number())
   }
 
   pub fn new() -> Self {
@@ -98,22 +99,41 @@ impl<'a> Display for ParseError<'a> {
     }
 }
 
-fn house_number(input: &str) -> IResult<&str, Box<dyn CountableHouseNumber>> {
-  alt((housenumber_range, concrete_housenumber))(input)
+pub fn house_number(input: &str) -> IResult<&str, HouseNumber> {
+  alt((complete(housenumber_range), wrapped_housenumber))(input)
 }
 
-fn concrete_housenumber(input: &str) -> IResult<&str, Box<dyn CountableHouseNumber>> {
-  let (rest, (number, letter)) = pair(digit1, alpha0)(input)?;
-  Ok((rest, Box::new(HouseNumber(number.parse().unwrap_or_default(), letter.to_string()))))
+pub fn wrapped_housenumber(input: &str) -> IResult<&str, HouseNumber> {
+  let (rest, housenumber) = single_housenumber(input)?;
+  Ok((rest, HouseNumber::Single(housenumber)))
 }
 
-fn housenumber_range(input: &str) -> IResult<&str, Box<dyn CountableHouseNumber>> {
-  let (rest, (housenumber1, housenumber2)) = separated_pair(concrete_housenumber, char('-'), concrete_housenumber)(input)?;
-  Ok((rest, Box::new(HouseNumberRange(housenumber1, housenumber2))))
+pub fn single_housenumber(input: &str) -> IResult<&str, SingleHouseNumber> {
+  let (rest, (number, letter)) = pair(digit1, ws(alpha0))(input)?;
+  Ok((rest, SingleHouseNumber(number.parse().unwrap_or_default(), letter.to_string())))
 }
 
-fn housenumber_list(input: &str) -> IResult<&str, HouseNumberList> {
-  let (rest, list) = separated_list1(alt((char('/'), char(','), char(';'))), house_number)(input)?;
+pub fn housenumber_range(input: &str) -> IResult<&str, HouseNumber> {
+  let (rest, (housenumber1, housenumber2)) = separated_pair(single_housenumber, ws(char('-')), single_housenumber)(input)?;
+  Ok((rest, HouseNumber::Range(housenumber1, housenumber2)))
+}
+
+pub fn housenumber_list(input: &str) -> IResult<&str, HouseNumberList> {
+  let (rest, list) = separated_list1(list_delimiter, house_number)(input)?;
   Ok((rest, HouseNumberList(list)))
 }
 
+pub fn list_delimiter(input: &str) -> IResult<&str, char> {
+  alt((ws(char('/')), ws(char(',')), ws(char(';'))))(input)
+}
+
+fn ws<'a, F, O, E: nom::error::ParseError<&'a str>>(inner: F) -> impl FnMut(&'a str) -> IResult<&'a str, O, E>
+  where
+  F: FnMut(&'a str) -> IResult<&'a str, O, E>,
+{
+  delimited(
+    multispace0,
+    inner,
+    multispace0
+  )
+}
