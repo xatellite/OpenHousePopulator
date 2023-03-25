@@ -1,7 +1,7 @@
 use itertools::Itertools;
 use nom::{
     branch::alt,
-    character::complete::{alpha0, char, digit1, multispace0, alpha1},
+    character::complete::{alpha0, alpha1, char, digit1, multispace0},
     combinator::complete,
     multi::separated_list1,
     sequence::{delimited, pair, separated_pair},
@@ -59,12 +59,15 @@ impl Display for SingleHouseNumber {
 pub struct Subdivisions(u16, Vec<String>);
 
 impl Subdivisions {
-  fn count(&self) -> usize {
-    self.1.len()
-  }
-  fn singles(&self) -> Vec<SingleHouseNumber> {
-    self.1.iter().map(|e| SingleHouseNumber(self.0, e.clone())).collect()
-  }
+    fn count(&self) -> usize {
+        self.1.len()
+    }
+    fn singles(&self) -> Vec<SingleHouseNumber> {
+        self.1
+            .iter()
+            .map(|e| SingleHouseNumber(self.0, e.clone()))
+            .collect()
+    }
 }
 
 impl Display for Subdivisions {
@@ -146,13 +149,20 @@ pub fn wrapped_single_housenumber(input: &str) -> IResult<&str, HouseNumber> {
 }
 
 pub fn wrapped_subdivided_housenumber(input: &str) -> IResult<&str, HouseNumber> {
-  let (rest, housenumber) = subdivided_housenumber(input)?;
-  Ok((rest, HouseNumber::Subdivided(housenumber)))
+    let (rest, housenumber) = subdivided_housenumber(input)?;
+    Ok((rest, HouseNumber::Subdivided(housenumber)))
 }
 
 pub fn subdivided_housenumber(input: &str) -> IResult<&str, Subdivisions> {
-    let (rest, (number, letters)) = pair(digit1, ws(separated_list1(char('/'), alpha1)))(input)?;
-    Ok((rest, Subdivisions(number.parse().unwrap_or_default(), letters.iter().map(|e| e.to_string()).collect())))
+    let (rest, (number, letters)) =
+        pair(digit1, ws(separated_list1(list_delimiter, alpha1)))(input)?;
+    Ok((
+        rest,
+        Subdivisions(
+            number.parse().unwrap_or_default(),
+            letters.iter().map(|e| e.to_string()).collect(),
+        ),
+    ))
 }
 
 pub fn single_housenumber(input: &str) -> IResult<&str, SingleHouseNumber> {
