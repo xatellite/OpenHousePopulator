@@ -3,15 +3,15 @@
 //! This tool automatically distributes a given amount of inhabitants to osm buildings.
 //! The calculation is based on predefined heuristics, calculating a flat count per building and randomly distributing people.
 
-mod geometry;
 mod datalayer;
+mod geometry;
 mod parser;
 
-use std::fmt::Display;
-use std::path::Path;
+use crate::geometry::write_polygons_to_geojson;
 use datalayer::{is_building, is_housenumber_node, load_buildings};
 use geo::Polygon;
-use crate::geometry::{write_polygons_to_geojson};
+use std::fmt::Display;
+use std::path::Path;
 
 #[derive(Debug)]
 pub enum Error {
@@ -48,8 +48,7 @@ pub fn spread_population(
     centroid: &bool,
     config: &Config,
 ) -> Result<(), Error> {
-
-  // Read pbf file
+    // Read pbf file
 
     let r = std::fs::File::open(file).map_err(|err| Error::IOError((err)))?; // ToDo Handle error
     let mut pbf = osmpbfreader::OsmPbfReader::new(r);

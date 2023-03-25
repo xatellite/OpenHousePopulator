@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
 use config::Config;
-use openhousepopulator::{spread_population};
+use openhousepopulator::spread_population;
 
 /// Simple program to greet a person
 #[derive(Parser)]
