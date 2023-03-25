@@ -20,8 +20,8 @@ struct HouseNumberPoint {
 
 #[derive(Debug)]
 pub struct Building {
-    polygon: Polygon,
-    tags: Tags,
+    pub polygon: Polygon,
+    pub tags: Tags,
 }
 
 impl Building {
@@ -50,6 +50,9 @@ impl Building {
             house_numbers.count().to_string().into(),
         );
         self
+    }
+    pub fn get_polygon(self) -> Polygon {
+        self.polygon
     }
 }
 

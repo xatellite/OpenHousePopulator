@@ -1,6 +1,11 @@
+use std::fs::File;
+use std::path::PathBuf;
+
 use clap::{Parser, Subcommand};
 use config::Config;
+use std::io::Write;
 use openhousepopulator::spread_population;
+use openhousepopulator::geometry::write_polygons_to_geojson;
 
 /// Simple program to greet a person
 #[derive(Parser)]
@@ -48,7 +53,17 @@ fn main() {
             centroid,
         }) => {
             let file = std::path::Path::new(file_string);
-            spread_population(file, inhabitants, centroid, &populator_config);
+            let buildings = spread_population(file, inhabitants, centroid, &populator_config).unwrap();
+
+            let geojson = write_polygons_to_geojson(&buildings, false);
+
+            // Create a temporary file.
+            let temp_directory = PathBuf::from("./out/");
+            let file_name = "Test.geojson";
+            let temp_file = temp_directory.join(&file_name);
+
+            let mut file = File::create(temp_file).unwrap();
+            write!(file, "{}", geojson.to_string());
         }
         None => {}
     }
