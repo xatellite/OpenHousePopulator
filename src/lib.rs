@@ -3,11 +3,11 @@
 //! This tool automatically distributes a given amount of inhabitants to osm buildings.
 //! The calculation is based on predefined heuristics, calculating a flat count per building and randomly distributing people.
 
-mod datalayer;
+mod pbf;
 pub mod geometry;
 mod parser;
 
-use datalayer::{is_building, is_housenumber_node, load_buildings, Building};
+use pbf::{is_building, is_housenumber_node, load_buildings, Building, load_housenumbers, Buildings};
 
 use std::fmt::Display;
 use std::path::Path;
@@ -32,11 +32,11 @@ impl std::error::Error for Error {}
 
 #[derive(Clone, serde::Deserialize)]
 pub struct Config {
-    pub level_threshold: usize,
-    pub reroll_threshold: usize,
-    pub reroll_probability: usize,
-    pub level_factor: usize,
-    pub housenumber_factor: usize,
+    pub level_threshold: i32,
+    pub reroll_threshold: i32,
+    pub reroll_probability: i32,
+    pub level_factor: i32,
+    pub housenumber_factor: i32,
     pub request_url: String,
 }
 
@@ -46,7 +46,7 @@ pub fn spread_population(
     _inhabitants: &u64,
     _centroid: &bool,
     _config: &Config,
-) -> Result<Vec<Building>, Error> {
+) -> Result<Buildings, Error> {
     // Read pbf file
 
     let r = std::fs::File::open(file).map_err(Error::IOError)?;
@@ -54,7 +54,9 @@ pub fn spread_population(
 
     let osm_buildings = pbf.get_objs_and_deps(is_building).unwrap();
     let osm_housenumbers = pbf.get_objs_and_deps(is_housenumber_node).unwrap();
-    let buildings = load_buildings(osm_buildings, osm_housenumbers);
+    let mut buildings = load_buildings(osm_buildings);
+    let housenumbers = load_housenumbers(osm_housenumbers);
+    buildings = buildings.distribute_population(housenumbers, _inhabitants.clone(), _config);
     // println!("{:?}", buildings);
     Ok(buildings)
 }

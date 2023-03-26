@@ -55,7 +55,7 @@ fn main() {
             let file = std::path::Path::new(file_string);
             let buildings = spread_population(file, inhabitants, centroid, &populator_config).unwrap();
 
-            let geojson = write_polygons_to_geojson(&buildings, false);
+            let geojson = write_polygons_to_geojson(&buildings.0, false);
 
             // Create a temporary file.
             let temp_directory = PathBuf::from("./out/");

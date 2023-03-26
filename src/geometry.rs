@@ -1,15 +1,10 @@
-use std::collections::HashMap;
-
 use geo::Centroid;
-use geo::Polygon;
-use geo::polygon;
 use geojson::Feature;
 use geojson::FeatureCollection;
 use geojson::GeoJson;
-use osmpbfreader::Tags;
 use serde_json::Value;
 
-use crate::datalayer::Building;
+use crate::pbf::Building;
 
 pub fn write_polygons_to_geojson(
     buildings: &Vec<Building>,
