@@ -3,13 +3,15 @@
 //! This tool automatically distributes a given amount of inhabitants to osm buildings.
 //! The calculation is based on predefined heuristics, calculating a flat count per building and randomly distributing people.
 
-mod pbf;
+mod config;
 pub mod geometry;
 mod parser;
-mod config;
+mod pbf;
 
 use osmpbfreader::OsmPbfReader;
-use pbf::{is_building, is_housenumber_node, load_ways, load_housenumbers, Buildings, is_exclude_area};
+use pbf::{
+    is_building, is_exclude_area, is_housenumber_node, load_housenumbers, load_ways, Buildings,
+};
 
 use std::fmt::Display;
 use std::fs::File;
@@ -36,7 +38,7 @@ impl std::error::Error for Error {}
 /// Calculates the population of houses in a given pbf
 pub fn populate_houses(
     pbf: &mut OsmPbfReader<File>,
-    inhabitants: &u64,
+    inhabitants: &Option<u64>,
     centroid: bool,
     config: &Config,
 ) -> Result<Buildings, Error> {
@@ -44,7 +46,9 @@ pub fn populate_houses(
     println!("Loading objects from pbf...");
     let osm_buildings = pbf.get_objs_and_deps(is_building).unwrap();
     let osm_housenumbers = pbf.get_objs_and_deps(is_housenumber_node).unwrap();
-    let osm_exclude_areas = pbf.get_objs_and_deps(|obj| is_exclude_area(obj, config)).unwrap();
+    let osm_exclude_areas = pbf
+        .get_objs_and_deps(|obj| is_exclude_area(obj, config))
+        .unwrap();
 
     println!("Loading ways...");
     let building_ways = load_ways(osm_buildings);
@@ -61,7 +65,11 @@ pub fn populate_houses(
     println!("Exclude areas...");
     buildings = buildings.exclude_in(&areas);
     println!("Distributing population...");
-    buildings.distribute_population(inhabitants.clone(), config);
+
+    match inhabitants {
+        Some(inhabitants) => buildings.distribute_population(inhabitants.clone(), config),
+        None => buildings.estimate_population(),
+    }
 
     Ok(buildings)
 }

@@ -1,7 +1,17 @@
-# OpenHousePopulator
+ 
+<div align="center">
+  <a href="https://github.com/xatellite/OpenHousePopulator">
+    <img src="res/logo.png" alt="Logo" width="150" height="150">
+  </a>
 
-This tool can be used to estimate the inhabitant count per house in an area with a known population.
-The result is based on a very simple heuristic, so low accuracy should be expected.
+  <h2 align="center">OpenHousePopulator</h3>
+  <p align="center">
+    This tool can be used to estimate the inhabitant count per house in an area with a known population using <a href="https://www.openstreetmap.org">OpenStreetMap</a> data.
+    The result is based on a very simple heuristic, so low accuracy should be expected.
+  </p>
+</div>
+
+
 
 ## Setup
 
@@ -34,8 +44,27 @@ To execute the CLI run:
 
 ```
 cd bin
-./OpenHousePopulator
+
+// Show help
+./OpenHousePopulator --help
+
+// Populate example area
+./OpenHousePopulator populate -f "./res/Gmunden.osm.pbf" -i 7602 --centroid
 ```
 
 Output:
-A GeoJson with all buildings including the additional fields 'pop' (population), 'flats' (household estimation), 'housenumbers' (calculated house numbers)
+A GeoJson with all buildings including the additional fields 'pop' (population), 'flats' (household estimation)
+
+## Configuration
+
+You can configure the following parameters in the `config.json` file:
+
+- reroll_threshold: The minimum population count to start rerolling (populate next building).
+- reroll_probability: The probability to reroll a building (over threshold).
+- level_factor: The factor to multiply the level count with (if multi-storey).
+- housenumber_factor: The factor to multiply the house number count with.
+- exclude_landuse: Areas to exclude buildings in. (e.g. ["industrial", "commercial"]).
+- exclude_tags: Areas to exclude by tag (e.g. ["amenity", "leisure"]).
+- single_home_list:  List of building values to be considered single home houses (e.g. ["house", "detached"]).
+- apartment_list: List of buildings values to be considered apartments (e.g. ["apartments", "residential"]).
+- unspecified_list: List of buildings values to be considered unspecified (e.g. ["terrace", "semidetached_house"]).
