@@ -5,9 +5,7 @@ use geojson::GeoJson;
 use crate::pbf::Building;
 use crate::pbf::GenericGeometry;
 
-pub fn write_polygons_to_geojson(
-    buildings: &Vec<Building>,
-) -> GeoJson {
+pub fn write_polygons_to_geojson(buildings: &Vec<Building>) -> GeoJson {
     let mut features = vec![];
 
     for building in buildings {
@@ -16,12 +14,8 @@ pub fn write_polygons_to_geojson(
         tags_map.insert("pop".to_string(), building.pop.into());
 
         let geometry = match &building.geometry {
-            GenericGeometry::GenericPolygon(polygon) => {
-                geojson::Geometry::from(polygon)
-            },
-            GenericGeometry::GenericPoint(point) => {
-                geojson::Geometry::from(point)
-            },
+            GenericGeometry::GenericPolygon(polygon) => geojson::Geometry::from(polygon),
+            GenericGeometry::GenericPoint(point) => geojson::Geometry::from(point),
         };
 
         let feature = Feature {

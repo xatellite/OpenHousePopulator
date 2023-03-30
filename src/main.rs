@@ -3,9 +3,9 @@ use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 use config::Config;
-use std::io::Write;
-use openhousepopulator::{Error, populate_houses};
 use openhousepopulator::geometry::write_polygons_to_geojson;
+use openhousepopulator::{populate_houses, Error};
+use std::io::Write;
 
 /// Simple program to greet a person
 #[derive(Parser)]
@@ -25,7 +25,7 @@ enum Commands {
 
         /// inhabitants living in region
         #[arg(short, long)]
-        inhabitants: u64,
+        inhabitants: Option<u64>,
 
         /// if result should be returned using centroids
         #[arg(short, long)]
@@ -55,7 +55,12 @@ fn main() {
             let file = std::path::Path::new(file_string);
             let r = std::fs::File::open(file).map_err(Error::IOError).unwrap();
             let mut pbf = osmpbfreader::OsmPbfReader::new(r);
-            let buildings = populate_houses(&mut pbf, inhabitants, *centroid, &populator_config).unwrap();
+            let buildings =
+                populate_houses(&mut pbf, inhabitants, *centroid, &populator_config).unwrap();
+            println!(
+                "Total Population: {}",
+                buildings.0.iter().map(|building| building.pop).sum::<u64>()
+            );
             let geojson = write_polygons_to_geojson(&buildings.0);
 
             // Create a temporary file.

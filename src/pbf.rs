@@ -8,7 +8,9 @@ use osmpbfreader::OsmId;
 use osmpbfreader::OsmObj;
 use osmpbfreader::Tags;
 use osmpbfreader::Way;
+use rand::prelude::Distribution;
 use rand::Rng;
+use statrs::distribution::Categorical;
 use std::collections::BTreeMap;
 use std::fmt::Display;
 
@@ -30,66 +32,84 @@ impl GenericWay {
     /// Gets the number of house numbers in the area
     fn calculate_house_number_count(&self, house_number_points: &Vec<HouseNumberPoint>) -> usize {
         // Count house numbers of way (tags)
-        let mut house_numbers = self.tags.get("addr:housenumber").and_then(|housenumber| {
-            HouseNumberList::try_from(housenumber.as_str()).ok()
-        }).unwrap_or_default();
+        let mut house_numbers = self
+            .tags
+            .get("addr:housenumber")
+            .and_then(|housenumber| HouseNumberList::try_from(housenumber.as_str()).ok())
+            .unwrap_or_default();
 
         // Count house numbers beeing positioned inside area (of way)
-        house_number_points.iter().filter(|house_number| {
-            self.polygon.contains(&house_number.point)
-        }).for_each(|house_number| {
-            house_numbers.merge(
-                HouseNumberList::try_from(house_number.text.as_str()).unwrap_or_default(),
-            );
-        });
+        house_number_points
+            .iter()
+            .filter(|house_number| self.polygon.contains(&house_number.point))
+            .for_each(|house_number| {
+                house_numbers.merge(
+                    HouseNumberList::try_from(house_number.text.as_str()).unwrap_or_default(),
+                );
+            });
 
         house_numbers.count()
     }
 
     /// Calculate number of flats inside building by tags
     fn calculate_flat_count(&self, house_numbers: usize, config: &Config) -> usize {
-
         // If flat count is defined in tags, this is applied
         if self.tags.contains_key("building:flats") {
-            let flat_count = self.tags["building:flats"]
-                .parse::<usize>()
-                .unwrap();
-            return flat_count
+            let flat_count = self.tags["building:flats"].parse::<usize>().unwrap();
+            return flat_count;
         }
-    
+
+        // If its a single home house, return 1
+        if config
+            .single_home_list
+            .contains(&self.tags["building"].to_string())
+        {
+            return 1;
+        }
+        
         // Otherwise estimate flat count by building type
         let mut flat_count: usize = 0;
-        if config.single_home_list.contains(&self.tags["building"].to_string()) {
-            flat_count = 1;
-        } else if config.apartment_list.contains(&self.tags["building"].to_string()) || config.unspecified_list.contains(&self.tags["building"].to_string()) {
+        if config
+            .apartment_list
+            .contains(&self.tags["building"].to_string())
+            || config
+                .unspecified_list
+                .contains(&self.tags["building"].to_string())
+        {
             if house_numbers >= 1 {
                 flat_count = house_numbers * config.housenumber_factor;
             } else {
-                flat_count = 1;
+                flat_count = 4;
             }
         } else if self.tags["building"] == "yes" && house_numbers >= 1 {
             flat_count = house_numbers;
         }
+
         // Increase flat count by building levels if specified
         if self.tags.contains_key("building:levels") {
-            let levels: i32 = self.tags["building:levels"].parse::<f32>().map_err(|err| {
-                println!("Error: {:?} on value {:?}", err, self.tags["building:levels"]);
-                0
-            }).unwrap().floor() as i32;
-            if levels > config.level_threshold {
-                flat_count += self.tags["building:levels"]
-                    .parse::<usize>()
-                    .unwrap()
-                    - 4;
-                flat_count *= config.level_factor;
-            }
+            let levels = self.tags["building:levels"]
+                .parse::<f32>()
+                .map_err(|err| {
+                    println!(
+                        "Error: {:?} on value {:?}",
+                        err, self.tags["building:levels"]
+                    );
+                    0
+                })
+                .unwrap()
+                .floor() as usize;
+            flat_count = flat_count * levels;
         }
 
         flat_count
     }
 
     /// Estimates number of flats inside building
-    pub fn calculate_building_metrics(&self, house_number_points: &Vec<HouseNumberPoint>, config: &Config) -> Building {
+    pub fn calculate_building_metrics(
+        &self,
+        house_number_points: &Vec<HouseNumberPoint>,
+        config: &Config,
+    ) -> Building {
         let house_number_count = self.calculate_house_number_count(house_number_points);
         let flat_count = self.calculate_flat_count(house_number_count, config);
         Building {
@@ -112,13 +132,16 @@ pub struct HouseNumberPoint {
     text: String,
 }
 
-pub struct Buildings (
-    pub Vec<Building>
-);
+pub struct Buildings(pub Vec<Building>);
 
 impl From<(Vec<GenericWay>, &Vec<HouseNumberPoint>, &Config)> for Buildings {
     fn from(item: (Vec<GenericWay>, &Vec<HouseNumberPoint>, &Config)) -> Self {
-        Buildings(item.0.into_iter().map(|way| Building::from((way, item.1, item.2))).collect())
+        Buildings(
+            item.0
+                .into_iter()
+                .map(|way| Building::from((way, item.1, item.2)))
+                .collect(),
+        )
     }
 }
 
@@ -134,7 +157,8 @@ impl Buildings {
         while inhabitants_to_distribute > 0 {
             let flat_index = rand::thread_rng().gen_range(0..total_flat_count - 1);
             if flat_inhabitants[flat_index] > config.reroll_threshold
-                && rand::thread_rng().gen_range(0..config.reroll_probability) > config.reroll_threshold.try_into().unwrap()
+                && rand::thread_rng().gen_range(0..config.reroll_probability)
+                    > config.reroll_threshold.try_into().unwrap()
             {
                 continue;
             }
@@ -148,7 +172,7 @@ impl Buildings {
             let mut building = building;
             let flat_count = building.flats;
             let mut population: u64 = 0;
-            for flat_index in flat_offset..(flat_offset+flat_count) {
+            for flat_index in flat_offset..(flat_offset + flat_count) {
                 population += flat_inhabitants[flat_index as usize];
             }
             flat_offset += flat_count;
@@ -157,14 +181,29 @@ impl Buildings {
     }
 
     /// Estimates the population of buildings by applying german household sizes by occurrence probability
-    pub fn estimate_population() ->() {
-        // TODO
+    pub fn estimate_population(&mut self) {
+        let dist = Categorical::new(&[0.20737853, 0.33310260, 0.17661846, 0.18911436, 0.09378605])
+            .unwrap();
+        self.0.iter_mut().for_each(|building| {
+            building.pop = dist
+                .clone()
+                .sample_iter(&mut rand::thread_rng())
+                .take(building.flats)
+                .map(|p| (p as u64) + 1)
+                .sum();
+        })
     }
 
-    pub(crate) fn exclude_in(mut self, area: &Vec<GenericWay>) -> Self{
-        self.0 = self.0.into_iter().filter(|building| {
-            !area.into_iter().any(|area| area.contains(&building.geometry))
-        }).collect();
+    pub(crate) fn exclude_in(mut self, area: &Vec<GenericWay>) -> Self {
+        self.0 = self
+            .0
+            .into_iter()
+            .filter(|building| {
+                !area
+                    .into_iter()
+                    .any(|area| area.contains(&building.geometry))
+            })
+            .collect();
         self
     }
 
@@ -204,12 +243,11 @@ impl Building {
         match &self.geometry {
             GenericGeometry::GenericPolygon(polygon) => {
                 self.geometry = GenericGeometry::GenericPoint(polygon.centroid().unwrap());
-            },
+            }
             GenericGeometry::GenericPoint(_) => {}
         }
     }
 }
-
 
 /// Check if osm obj is building
 pub(crate) fn is_building(obj: &osmpbfreader::OsmObj) -> bool {
@@ -221,16 +259,20 @@ pub(crate) fn is_housenumber_node(obj: &osmpbfreader::OsmObj) -> bool {
     obj.is_node() && obj.tags().contains_key("addr:housenumber")
 }
 
-
 /// Check if osm obj is part of the exclude areas
 pub(crate) fn is_exclude_area(obj: &osmpbfreader::OsmObj, config: &Config) -> bool {
-    obj.is_way() && ((obj.tags().contains_key("landuse") && config.exclude_landuse.contains(&obj.tags()["landuse"].to_string()))
-    || config.exclude_tags.iter().any(|exclude_tag| obj.tags().contains_key(exclude_tag.as_str())))
+    obj.is_way()
+        && ((obj.tags().contains_key("landuse")
+            && config
+                .exclude_landuse
+                .contains(&obj.tags()["landuse"].to_string()))
+            || config
+                .exclude_tags
+                .iter()
+                .any(|exclude_tag| obj.tags().contains_key(exclude_tag.as_str())))
 }
 
-pub(crate) fn load_ways(
-    osm_buildings: BTreeMap<OsmId, OsmObj>,
-) -> Vec<GenericWay> {
+pub(crate) fn load_ways(osm_buildings: BTreeMap<OsmId, OsmObj>) -> Vec<GenericWay> {
     // Extract buildings and all nodes
     let osm_building_ways: Vec<Way> = osm_buildings
         .clone()
@@ -279,15 +321,14 @@ pub(crate) fn load_ways(
 pub(crate) fn load_housenumbers(
     osm_housenumbers: BTreeMap<OsmId, OsmObj>,
 ) -> Vec<HouseNumberPoint> {
-
     let osm_housenumber_nodes: BTreeMap<NodeId, Node> = osm_housenumbers
-    .into_iter()
-    .filter_map(|(_, obj)| match obj {
-        OsmObj::Node(inner) => Some(inner),
-        _ => None,
-    })
-    .map(|node| (node.id, node))
-    .collect(); // TODO: How to get rid of this map function?
+        .into_iter()
+        .filter_map(|(_, obj)| match obj {
+            OsmObj::Node(inner) => Some(inner),
+            _ => None,
+        })
+        .map(|node| (node.id, node))
+        .collect(); // TODO: How to get rid of this map function?
 
     let housenumbers: Vec<HouseNumberPoint> = osm_housenumber_nodes
         .values()
