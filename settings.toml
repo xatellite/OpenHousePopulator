@@ -6,3 +6,6 @@ housenumber_factor = 3
 request_url = "https://maps.mail.ru/osm/tools/overpass/api/interpreter"
 exclude_landuse = ["allotments", "commercial", "industrial", "military", "retail"]
 exclude_tags = ["amenity", "leisure"]
+single_home_list = ["house", "detached"]
+apartment_list = ["apartments", "residential"]
+unspecified_list = ["terrace", "semidetached_house"]

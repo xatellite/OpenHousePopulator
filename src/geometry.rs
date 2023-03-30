@@ -1,35 +1,32 @@
-use geo::Centroid;
 use geojson::Feature;
 use geojson::FeatureCollection;
 use geojson::GeoJson;
-use serde_json::Value;
 
 use crate::pbf::Building;
+use crate::pbf::GenericGeometry;
 
 pub fn write_polygons_to_geojson(
     buildings: &Vec<Building>,
-    apply_centroid: bool,
 ) -> GeoJson {
     let mut features = vec![];
 
     for building in buildings {
         let mut tags_map = serde_json::Map::new();
-        building.tags.iter().for_each(|(k, v)| {
-            tags_map.insert(k.to_string(), Value::String(v.to_string()));
-        });
+        tags_map.insert("flats".to_string(), building.flats.into());
+        tags_map.insert("pop".to_string(), building.pop.into());
 
-        let geojson_geomentry;
-
-        if apply_centroid {
-            let point = building.polygon.centroid().expect("not a centroid");
-            geojson_geomentry = Some(geojson::Geometry::from(&point));
-        } else {
-            geojson_geomentry = Some(geojson::Geometry::from(&building.polygon));
-        }
+        let geometry = match &building.geometry {
+            GenericGeometry::GenericPolygon(polygon) => {
+                geojson::Geometry::from(polygon)
+            },
+            GenericGeometry::GenericPoint(point) => {
+                geojson::Geometry::from(point)
+            },
+        };
 
         let feature = Feature {
             bbox: None,
-            geometry: geojson_geomentry,
+            geometry: Some(geometry),
             id: None,
             properties: Some(tags_map),
             foreign_members: None,

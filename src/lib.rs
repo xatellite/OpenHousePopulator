@@ -7,10 +7,11 @@ mod pbf;
 pub mod geometry;
 mod parser;
 
-use pbf::{is_building, is_housenumber_node, load_ways, Building, load_housenumbers, Buildings, is_exclude_area};
+use osmpbfreader::OsmPbfReader;
+use pbf::{is_building, is_housenumber_node, load_ways, load_housenumbers, Buildings, is_exclude_area};
 
 use std::fmt::Display;
-use std::path::Path;
+use std::fs::File;
 
 #[derive(Debug)]
 pub enum Error {
@@ -23,7 +24,6 @@ impl Display for Error {
         match self {
             Self::OverpassError(err) => write!(f, "failed to query overpass api: {}", err),
             Self::IOError(err) => write!(f, "io error occured: {}", err),
-            _ => write!(f, "some error occured"),
         }
     }
 }
@@ -33,35 +33,47 @@ impl std::error::Error for Error {}
 #[derive(Clone, serde::Deserialize)]
 pub struct Config {
     pub level_threshold: i32,
-    pub reroll_threshold: i32,
+    pub reroll_threshold: u64,
     pub reroll_probability: i32,
-    pub level_factor: i32,
-    pub housenumber_factor: i32,
+    pub level_factor: usize,
+    pub housenumber_factor: usize,
     pub request_url: String,
     pub exclude_landuse: Vec<String>,
     pub exclude_tags: Vec<String>,
+    pub single_home_list: Vec<String>,
+    pub apartment_list: Vec<String>,
+    pub unspecified_list: Vec<String>,
 }
 
-/// Takes pbf and inhabitants count and calculates geojson
-pub fn spread_population(
-    file: &Path,
-    _inhabitants: &u64,
-    _centroid: &bool,
-    _config: &Config,
+/// Calculates the population of houses in a given pbf
+pub fn populate_houses(
+    pbf: &mut OsmPbfReader<File>,
+    inhabitants: &u64,
+    centroid: bool,
+    config: &Config,
 ) -> Result<Buildings, Error> {
-    // Read pbf file
-
-    let r = std::fs::File::open(file).map_err(Error::IOError)?;
-    let mut pbf = osmpbfreader::OsmPbfReader::new(r);
-
+    // Retrieve objects from pbf
+    println!("Loading objects from pbf...");
     let osm_buildings = pbf.get_objs_and_deps(is_building).unwrap();
     let osm_housenumbers = pbf.get_objs_and_deps(is_housenumber_node).unwrap();
-    let osm_exclude_areas = pbf.get_objs_and_deps(|obj| is_exclude_area(obj, _config)).unwrap();
-    let mut buildings = Buildings::from(load_ways(osm_buildings));
-    let areas = load_ways(osm_exclude_areas);
-    buildings = buildings.exclude_in(&areas);
+    let osm_exclude_areas = pbf.get_objs_and_deps(|obj| is_exclude_area(obj, config)).unwrap();
+
+    println!("Loading ways...");
+    let building_ways = load_ways(osm_buildings);
+    println!("Loading housenumbers...");
     let housenumbers = load_housenumbers(osm_housenumbers);
-    buildings = buildings.distribute_population(housenumbers, _inhabitants.clone(), _config);
-    // println!("{:?}", buildings);
+    println!("Creating buildings...");
+    let mut buildings = Buildings::from((building_ways, &housenumbers, config));
+    println!("Loading exclude areas...");
+    let areas = load_ways(osm_exclude_areas);
+    if centroid {
+        println!("Calculating centroids...");
+        buildings.centroid();
+    }
+    println!("Exclude areas...");
+    buildings = buildings.exclude_in(&areas);
+    println!("Distributing population...");
+    buildings.distribute_population(inhabitants.clone(), config);
+
     Ok(buildings)
 }

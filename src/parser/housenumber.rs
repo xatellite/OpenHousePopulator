@@ -17,14 +17,6 @@ pub enum HouseNumber {
 }
 
 impl HouseNumber {
-    pub fn count(&self) -> usize {
-        match self {
-            HouseNumber::Single(_) => 1,
-            HouseNumber::Subdivided(sdv) => sdv.count(),
-            HouseNumber::Range(hn1, hn2) => (hn2.0 - hn1.0).into(),
-        }
-    }
-
     fn singles(&self) -> Vec<SingleHouseNumber> {
         match self {
             HouseNumber::Single(hn) => vec![hn.to_owned()],
@@ -59,9 +51,6 @@ impl Display for SingleHouseNumber {
 pub struct Subdivisions(u16, Vec<String>);
 
 impl Subdivisions {
-    fn count(&self) -> usize {
-        self.1.len()
-    }
     fn singles(&self) -> Vec<SingleHouseNumber> {
         self.1
             .iter()
@@ -82,10 +71,6 @@ pub struct HouseNumberList(HashSet<SingleHouseNumber>);
 impl HouseNumberList {
     pub fn merge(&mut self, other: HouseNumberList) {
         self.0.extend(other.0);
-    }
-
-    pub fn new() -> Self {
-        HouseNumberList(HashSet::new())
     }
 }
 
@@ -135,25 +120,25 @@ impl<'a> Display for ParseError<'a> {
     }
 }
 
-pub fn house_number(input: &str) -> IResult<&str, HouseNumber> {
+fn house_number(input: &str) -> IResult<&str, HouseNumber> {
     alt((complete(housenumber_range), wrapped_housenumber))(input)
 }
 
-pub fn wrapped_housenumber(input: &str) -> IResult<&str, HouseNumber> {
+fn wrapped_housenumber(input: &str) -> IResult<&str, HouseNumber> {
     alt((wrapped_subdivided_housenumber, wrapped_single_housenumber))(input)
 }
 
-pub fn wrapped_single_housenumber(input: &str) -> IResult<&str, HouseNumber> {
+fn wrapped_single_housenumber(input: &str) -> IResult<&str, HouseNumber> {
     let (rest, housenumber) = single_housenumber(input)?;
     Ok((rest, HouseNumber::Single(housenumber)))
 }
 
-pub fn wrapped_subdivided_housenumber(input: &str) -> IResult<&str, HouseNumber> {
+fn wrapped_subdivided_housenumber(input: &str) -> IResult<&str, HouseNumber> {
     let (rest, housenumber) = subdivided_housenumber(input)?;
     Ok((rest, HouseNumber::Subdivided(housenumber)))
 }
 
-pub fn subdivided_housenumber(input: &str) -> IResult<&str, Subdivisions> {
+fn subdivided_housenumber(input: &str) -> IResult<&str, Subdivisions> {
     let (rest, (number, letters)) =
         pair(digit1, ws(separated_list1(list_delimiter, alpha1)))(input)?;
     Ok((
@@ -165,7 +150,7 @@ pub fn subdivided_housenumber(input: &str) -> IResult<&str, Subdivisions> {
     ))
 }
 
-pub fn single_housenumber(input: &str) -> IResult<&str, SingleHouseNumber> {
+fn single_housenumber(input: &str) -> IResult<&str, SingleHouseNumber> {
     let (rest, (number, letter)) = pair(digit1, ws(alpha0))(input)?;
     Ok((
         rest,
@@ -173,13 +158,13 @@ pub fn single_housenumber(input: &str) -> IResult<&str, SingleHouseNumber> {
     ))
 }
 
-pub fn housenumber_range(input: &str) -> IResult<&str, HouseNumber> {
+fn housenumber_range(input: &str) -> IResult<&str, HouseNumber> {
     let (rest, (housenumber1, housenumber2)) =
         separated_pair(single_housenumber, ws(char('-')), single_housenumber)(input)?;
     Ok((rest, HouseNumber::Range(housenumber1, housenumber2)))
 }
 
-pub fn housenumber_list(input: &str) -> IResult<&str, HouseNumberList> {
+fn housenumber_list(input: &str) -> IResult<&str, HouseNumberList> {
     let (rest, list) = separated_list1(list_delimiter, house_number)(input)?;
     Ok((
         rest,
@@ -187,7 +172,7 @@ pub fn housenumber_list(input: &str) -> IResult<&str, HouseNumberList> {
     ))
 }
 
-pub fn list_delimiter(input: &str) -> IResult<&str, char> {
+fn list_delimiter(input: &str) -> IResult<&str, char> {
     alt((ws(char('/')), ws(char(',')), ws(char(';'))))(input)
 }
 

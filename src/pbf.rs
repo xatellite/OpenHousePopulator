@@ -1,3 +1,4 @@
+use geo::Centroid;
 use geo::Contains;
 use geo::Point;
 use geo::Polygon;
@@ -14,6 +15,98 @@ use std::fmt::Display;
 use crate::Config;
 use crate::parser::housenumber::HouseNumberList;
 
+#[derive(Debug)]
+pub enum GenericGeometry {
+    GenericPolygon(Polygon),
+    GenericPoint(Point),
+}
+
+pub struct GenericWay {
+    pub polygon: Polygon,
+    pub tags: Tags,
+}
+
+impl GenericWay {
+    /// Gets the number of house numbers in the area
+    fn calculate_house_number_count(&self, house_number_points: &Vec<HouseNumberPoint>) -> usize {
+        // Count house numbers of way (tags)
+        let mut house_numbers = self.tags.get("addr:housenumber").and_then(|housenumber| {
+            HouseNumberList::try_from(housenumber.as_str()).ok()
+        }).unwrap_or_default();
+
+        // Count house numbers beeing positioned inside area (of way)
+        house_number_points.iter().filter(|house_number| {
+            self.polygon.contains(&house_number.point)
+        }).for_each(|house_number| {
+            house_numbers.merge(
+                HouseNumberList::try_from(house_number.text.as_str()).unwrap_or_default(),
+            );
+        });
+
+        house_numbers.count()
+    }
+
+    /// Calculate number of flats inside building by tags
+    fn calculate_flat_count(&self, house_numbers: usize, config: &Config) -> usize {
+
+        // If flat count is defined in tags, this is applied
+        if self.tags.contains_key("building:flats") {
+            let flat_count = self.tags["building:flats"]
+                .parse::<usize>()
+                .unwrap();
+            return flat_count
+        }
+    
+        // Otherwise estimate flat count by building type
+        let mut flat_count: usize = 0;
+        if config.single_home_list.contains(&self.tags["building"].to_string()) {
+            flat_count = 1;
+        } else if config.apartment_list.contains(&self.tags["building"].to_string()) || config.unspecified_list.contains(&self.tags["building"].to_string()) {
+            if house_numbers >= 1 {
+                flat_count = house_numbers * config.housenumber_factor;
+            } else {
+                flat_count = 1;
+            }
+        } else if self.tags["building"] == "yes" && house_numbers >= 1 {
+            flat_count = house_numbers;
+        }
+        // Increase flat count by building levels if specified
+        if self.tags.contains_key("building:levels") {
+            let levels: i32 = self.tags["building:levels"].parse::<f32>().map_err(|err| {
+                println!("Error: {:?} on value {:?}", err, self.tags["building:levels"]);
+                0
+            }).unwrap().floor() as i32;
+            if levels > config.level_threshold {
+                flat_count += self.tags["building:levels"]
+                    .parse::<usize>()
+                    .unwrap()
+                    - 4;
+                flat_count *= config.level_factor;
+            }
+        }
+
+        flat_count
+    }
+
+    /// Estimates number of flats inside building
+    pub fn calculate_building_metrics(&self, house_number_points: &Vec<HouseNumberPoint>, config: &Config) -> Building {
+        let house_number_count = self.calculate_house_number_count(house_number_points);
+        let flat_count = self.calculate_flat_count(house_number_count, config);
+        Building {
+            geometry: GenericGeometry::GenericPolygon(self.polygon.clone()),
+            flats: flat_count,
+            pop: 0,
+        }
+    }
+
+    fn contains(&self, geometry: &GenericGeometry) -> bool {
+        match geometry {
+            GenericGeometry::GenericPolygon(polygon) => self.polygon.contains(polygon),
+            GenericGeometry::GenericPoint(point2) => self.polygon.contains(point2),
+        }
+    }
+}
+
 pub struct HouseNumberPoint {
     point: Point,
     text: String,
@@ -23,28 +116,25 @@ pub struct Buildings (
     pub Vec<Building>
 );
 
-impl From<Vec<GenericWay>> for Buildings {
-    fn from(item: Vec<GenericWay>) -> Self {
-        Buildings(item.into_iter().map(|way| Building::from(way)).collect())
+impl From<(Vec<GenericWay>, &Vec<HouseNumberPoint>, &Config)> for Buildings {
+    fn from(item: (Vec<GenericWay>, &Vec<HouseNumberPoint>, &Config)) -> Self {
+        Buildings(item.0.into_iter().map(|way| Building::from((way, item.1, item.2))).collect())
     }
 }
 
 impl Buildings {
-    pub fn distribute_population(mut self, housenumbers: Vec<HouseNumberPoint>, inhabitants_total: u64, config: &Config) -> Self {
-        // Calculate flats for all buildings
-        self.0 = self.0.into_iter().map(|building| building.estimate_flat_count(&housenumbers, config)).collect();
-
+    /// Distributes a known population to buildings
+    pub fn distribute_population(&mut self, inhabitants_total: u64, config: &Config) {
         // Gather total flat count
-        let total_flat_count: u32 = self.0.iter().map(|building| building.tags["flats"].parse::<u32>().unwrap()).sum();
+        let total_flat_count: usize = self.0.iter().map(|building| building.flats).sum();
 
         // Distribute population
-        let mut flat_inhabitants = vec![0; total_flat_count as usize];
-
+        let mut flat_inhabitants: Vec<u64> = vec![0; total_flat_count];
         let mut inhabitants_to_distribute = inhabitants_total;
         while inhabitants_to_distribute > 0 {
-            let flat_index = rand::thread_rng().gen_range(0..total_flat_count - 1) as usize;
+            let flat_index = rand::thread_rng().gen_range(0..total_flat_count - 1);
             if flat_inhabitants[flat_index] > config.reroll_threshold
-                && rand::thread_rng().gen_range(0..config.reroll_probability) > config.reroll_threshold
+                && rand::thread_rng().gen_range(0..config.reroll_probability) > config.reroll_threshold.try_into().unwrap()
             {
                 continue;
             }
@@ -54,165 +144,85 @@ impl Buildings {
 
         // Add population tag to buildings
         let mut flat_offset = 0;
-        self.0 = self.0.into_iter().map(|building| {
+        self.0.iter_mut().for_each(|building| {
             let mut building = building;
-            let flat_count = building.tags["flats"].parse::<u32>().unwrap();
-            let mut population = 0;
+            let flat_count = building.flats;
+            let mut population: u64 = 0;
             for flat_index in flat_offset..(flat_offset+flat_count) {
                 population += flat_inhabitants[flat_index as usize];
             }
             flat_offset += flat_count;
-            building.tags.insert("pop".to_string().into(), population.to_string().into());
-            building
-        }).collect();
+            building.pop += population;
+        });
+    }
 
-        self
+    /// Estimates the population of buildings by applying german household sizes by occurrence probability
+    pub fn estimate_population() ->() {
+        // TODO
     }
 
     pub fn exclude_in(mut self, area: &Vec<GenericWay>) -> Self{
         self.0 = self.0.into_iter().filter(|building| {
-            !area.into_iter().any(|area| area.polygon.contains(&building.polygon))
+            !area.into_iter().any(|area| area.contains(&building.geometry))
         }).collect();
         self
     }
+
+    pub fn centroid(&mut self) {
+        self.0.iter_mut().for_each(|building| {
+            building.centroid();
+        });
+    }
 }
 
-
-
-pub struct GenericWay {
-    pub polygon: Polygon,
-    pub tags: Tags,
-}
-
+/// A building is a area or point with information about estimated flats and population
 #[derive(Debug)]
 pub struct Building {
-    pub polygon: Polygon,
-    pub tags: Tags,
+    pub geometry: GenericGeometry,
+    pub flats: usize,
+    pub pop: u64,
 }
 
-impl From<GenericWay> for Building {
-    fn from(item: GenericWay) -> Self {
-        Building { polygon: item.polygon, tags: item.tags }
+impl From<(GenericWay, &Vec<HouseNumberPoint>, &Config)> for Building {
+    fn from(item: (GenericWay, &Vec<HouseNumberPoint>, &Config)) -> Self {
+        item.0.calculate_building_metrics(item.1, item.2)
     }
-}
-
-impl Building {
-    /// Gets the number of house numbers in the building
-    fn calculate_house_number_count(mut self, house_number_points: &Vec<HouseNumberPoint>) -> Self {
-        let mut house_numbers = HouseNumberList::new();
-        if self.tags.contains_key("addr:housenumber") {
-            house_numbers = match HouseNumberList::try_from(self.tags["addr:housenumber"].as_str())
-            {
-                Ok(house_number) => house_number,
-                Err(err) => {
-                    println!("Error: {:?}", err);
-                    HouseNumberList::new()
-                }
-            };
-        }
-        for house_number in house_number_points {
-            if self.polygon.contains(&house_number.point) {
-                // Check house number not the same
-                house_numbers.merge(
-                    HouseNumberList::try_from(house_number.text.as_str()).unwrap_or_default(),
-                );
-            }
-        }
-        self.tags.insert(
-            "addr:housenumber_count".to_string().into(),
-            house_numbers.count().to_string().into(),
-        );
-        self
-    }
-
-    /// Calculate number of flats inside building by tags
-    fn calculate_flat_count(mut self, config: &Config) -> Self {
-        let single_home_list: [&str; 2] = ["house", "detached"];
-        let apartment_list: [&str; 2] = ["apartments", "residential"];
-        let unspecified_list: [&str; 2] = ["terrace", "semidetached_house"];
-
-        // If flat count is defined in tags, this is applied
-        if self.tags.contains_key("building:flats") {
-            let flat_count = self.tags["building:flats"]
-                .parse::<i32>()
-                .unwrap();
-            self.tags.insert(
-                "flats".to_string().into(),
-                flat_count.to_string().into(),
-            );
-            return self
-        }
-
-        let house_numbers = self.tags["addr:housenumber_count"]
-            .parse::<i32>()
-            .unwrap(); // ToDo: Map error here!
-
-        let mut flat_count: i32 = 0;
-        if single_home_list.contains(&self.tags["building"].as_str()) {
-            flat_count = 1;
-        } else if apartment_list.contains(&self.tags["building"].as_str()) || unspecified_list.contains(&self.tags["building"].as_str()) {
-            if house_numbers >= 1 {
-                flat_count = house_numbers * config.housenumber_factor;
-            } else {
-                flat_count = 1;
-            }
-        } else if self.tags["building"] == "yes" && house_numbers >= 1 {
-            flat_count = house_numbers;
-        }
-
-        // Increase flat count by building levels
-        if self.tags.contains_key("building:levels") {
-            let levels: i32 = self.tags["building:levels"].parse::<f32>().map_err(|err| {
-                println!("Error: {:?} on value {:?}", err, self.tags["building:levels"]);
-                0
-            }).unwrap().floor() as i32;
-            if levels > config.level_threshold {
-                flat_count += self.tags["building:levels"]
-                    .parse::<i32>()
-                    .unwrap()
-                    - 4;
-                flat_count *= config.level_factor;
-            }
-        }
-
-        // Insert flat tag
-        self.tags.insert(
-            "flats".to_string().into(),
-            flat_count.to_string().into(),
-        );
-        self
-    }
-
-    /// Estimates number of flats inside building
-    pub fn estimate_flat_count(self, house_number_points: &Vec<HouseNumberPoint>, config: &Config) -> Self {
-        self.calculate_house_number_count(house_number_points)
-            .calculate_flat_count(config)
-    }
-
 }
 
 impl Display for Building {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "Building {{ polygon: {:?}, tags: {:?} }}",
-            self.polygon, self.tags
+            "Building {{ polygon: {:?}, flats: {:?}, population: {:?} }}",
+            self.geometry, self.flats, self.pop
         )
     }
 }
+
+impl Building {
+    pub fn centroid(&mut self) {
+        match &self.geometry {
+            GenericGeometry::GenericPolygon(polygon) => {
+                self.geometry = GenericGeometry::GenericPoint(polygon.centroid().unwrap());
+            },
+            GenericGeometry::GenericPoint(_) => {}
+        }
+    }
+}
+
 
 /// Check if osm obj is building
 pub fn is_building(obj: &osmpbfreader::OsmObj) -> bool {
     (obj.is_node() || obj.is_way()) && obj.tags().contains_key("building")
 }
 
-/// Check if osm obj is building
+/// Check if osm obj is housenumber
 pub fn is_housenumber_node(obj: &osmpbfreader::OsmObj) -> bool {
     obj.is_node() && obj.tags().contains_key("addr:housenumber")
 }
 
 
-/// Check if osm obj is building
+/// Check if osm obj is part of the exclude areas
 pub fn is_exclude_area(obj: &osmpbfreader::OsmObj, config: &Config) -> bool {
     obj.is_way() && ((obj.tags().contains_key("landuse") && config.exclude_landuse.contains(&obj.tags()["landuse"].to_string()))
     || config.exclude_tags.iter().any(|exclude_tag| obj.tags().contains_key(exclude_tag.as_str())))
