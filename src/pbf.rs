@@ -12,7 +12,7 @@ use rand::Rng;
 use std::collections::BTreeMap;
 use std::fmt::Display;
 
-use crate::Config;
+use crate::config::Config;
 use crate::parser::housenumber::HouseNumberList;
 
 #[derive(Debug)]
@@ -161,14 +161,14 @@ impl Buildings {
         // TODO
     }
 
-    pub fn exclude_in(mut self, area: &Vec<GenericWay>) -> Self{
+    pub(crate) fn exclude_in(mut self, area: &Vec<GenericWay>) -> Self{
         self.0 = self.0.into_iter().filter(|building| {
             !area.into_iter().any(|area| area.contains(&building.geometry))
         }).collect();
         self
     }
 
-    pub fn centroid(&mut self) {
+    pub(crate) fn centroid(&mut self) {
         self.0.iter_mut().for_each(|building| {
             building.centroid();
         });
@@ -212,23 +212,23 @@ impl Building {
 
 
 /// Check if osm obj is building
-pub fn is_building(obj: &osmpbfreader::OsmObj) -> bool {
+pub(crate) fn is_building(obj: &osmpbfreader::OsmObj) -> bool {
     (obj.is_node() || obj.is_way()) && obj.tags().contains_key("building")
 }
 
 /// Check if osm obj is housenumber
-pub fn is_housenumber_node(obj: &osmpbfreader::OsmObj) -> bool {
+pub(crate) fn is_housenumber_node(obj: &osmpbfreader::OsmObj) -> bool {
     obj.is_node() && obj.tags().contains_key("addr:housenumber")
 }
 
 
 /// Check if osm obj is part of the exclude areas
-pub fn is_exclude_area(obj: &osmpbfreader::OsmObj, config: &Config) -> bool {
+pub(crate) fn is_exclude_area(obj: &osmpbfreader::OsmObj, config: &Config) -> bool {
     obj.is_way() && ((obj.tags().contains_key("landuse") && config.exclude_landuse.contains(&obj.tags()["landuse"].to_string()))
     || config.exclude_tags.iter().any(|exclude_tag| obj.tags().contains_key(exclude_tag.as_str())))
 }
 
-pub fn load_ways(
+pub(crate) fn load_ways(
     osm_buildings: BTreeMap<OsmId, OsmObj>,
 ) -> Vec<GenericWay> {
     // Extract buildings and all nodes
@@ -276,7 +276,7 @@ pub fn load_ways(
     ways
 }
 
-pub fn load_housenumbers(
+pub(crate) fn load_housenumbers(
     osm_housenumbers: BTreeMap<OsmId, OsmObj>,
 ) -> Vec<HouseNumberPoint> {
 
@@ -303,8 +303,3 @@ pub fn load_housenumbers(
 
     housenumbers
 }
-
-
-// ToDo: Filter function 
-// let exclude_keys: [&str; 3] = ["leisure", "amenity", "emergency"];
-// and areas

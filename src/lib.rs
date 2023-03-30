@@ -6,12 +6,15 @@
 mod pbf;
 pub mod geometry;
 mod parser;
+mod config;
 
 use osmpbfreader::OsmPbfReader;
 use pbf::{is_building, is_housenumber_node, load_ways, load_housenumbers, Buildings, is_exclude_area};
 
 use std::fmt::Display;
 use std::fs::File;
+
+pub use crate::config::Config;
 
 #[derive(Debug)]
 pub enum Error {
@@ -29,21 +32,6 @@ impl Display for Error {
 }
 
 impl std::error::Error for Error {}
-
-#[derive(Clone, serde::Deserialize)]
-pub struct Config {
-    pub level_threshold: i32,
-    pub reroll_threshold: u64,
-    pub reroll_probability: i32,
-    pub level_factor: usize,
-    pub housenumber_factor: usize,
-    pub request_url: String,
-    pub exclude_landuse: Vec<String>,
-    pub exclude_tags: Vec<String>,
-    pub single_home_list: Vec<String>,
-    pub apartment_list: Vec<String>,
-    pub unspecified_list: Vec<String>,
-}
 
 /// Calculates the population of houses in a given pbf
 pub fn populate_houses(

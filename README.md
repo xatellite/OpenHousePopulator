@@ -1,4 +1,4 @@
-# OpenPopulationEstimator
+# OpenHousePopulator
 
 This tool can be used to estimate the inhabitant count per house in an area with a known population.
 The result is based on a very simple heuristic, so low accuracy should be expected.
