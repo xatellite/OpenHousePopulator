@@ -7,7 +7,7 @@ mod pbf;
 pub mod geometry;
 mod parser;
 
-use pbf::{is_building, is_housenumber_node, load_buildings, Building, load_housenumbers, Buildings};
+use pbf::{is_building, is_housenumber_node, load_ways, Building, load_housenumbers, Buildings, is_exclude_area};
 
 use std::fmt::Display;
 use std::path::Path;
@@ -38,6 +38,8 @@ pub struct Config {
     pub level_factor: i32,
     pub housenumber_factor: i32,
     pub request_url: String,
+    pub exclude_landuse: Vec<String>,
+    pub exclude_tags: Vec<String>,
 }
 
 /// Takes pbf and inhabitants count and calculates geojson
@@ -54,7 +56,10 @@ pub fn spread_population(
 
     let osm_buildings = pbf.get_objs_and_deps(is_building).unwrap();
     let osm_housenumbers = pbf.get_objs_and_deps(is_housenumber_node).unwrap();
-    let mut buildings = load_buildings(osm_buildings);
+    let osm_exclude_areas = pbf.get_objs_and_deps(|obj| is_exclude_area(obj, _config)).unwrap();
+    let mut buildings = Buildings::from(load_ways(osm_buildings));
+    let areas = load_ways(osm_exclude_areas);
+    buildings = buildings.exclude_in(&areas);
     let housenumbers = load_housenumbers(osm_housenumbers);
     buildings = buildings.distribute_population(housenumbers, _inhabitants.clone(), _config);
     // println!("{:?}", buildings);

@@ -23,6 +23,12 @@ pub struct Buildings (
     pub Vec<Building>
 );
 
+impl From<Vec<GenericWay>> for Buildings {
+    fn from(item: Vec<GenericWay>) -> Self {
+        Buildings(item.into_iter().map(|way| Building::from(way)).collect())
+    }
+}
+
 impl Buildings {
     pub fn distribute_population(mut self, housenumbers: Vec<HouseNumberPoint>, inhabitants_total: u64, config: &Config) -> Self {
         // Calculate flats for all buildings
@@ -62,12 +68,32 @@ impl Buildings {
 
         self
     }
+
+    pub fn exclude_in(mut self, area: &Vec<GenericWay>) -> Self{
+        self.0 = self.0.into_iter().filter(|building| {
+            !area.into_iter().any(|area| area.polygon.contains(&building.polygon))
+        }).collect();
+        self
+    }
+}
+
+
+
+pub struct GenericWay {
+    pub polygon: Polygon,
+    pub tags: Tags,
 }
 
 #[derive(Debug)]
 pub struct Building {
     pub polygon: Polygon,
     pub tags: Tags,
+}
+
+impl From<GenericWay> for Building {
+    fn from(item: GenericWay) -> Self {
+        Building { polygon: item.polygon, tags: item.tags }
+    }
 }
 
 impl Building {
@@ -185,9 +211,16 @@ pub fn is_housenumber_node(obj: &osmpbfreader::OsmObj) -> bool {
     obj.is_node() && obj.tags().contains_key("addr:housenumber")
 }
 
-pub fn load_buildings(
+
+/// Check if osm obj is building
+pub fn is_exclude_area(obj: &osmpbfreader::OsmObj, config: &Config) -> bool {
+    obj.is_way() && ((obj.tags().contains_key("landuse") && config.exclude_landuse.contains(&obj.tags()["landuse"].to_string()))
+    || config.exclude_tags.iter().any(|exclude_tag| obj.tags().contains_key(exclude_tag.as_str())))
+}
+
+pub fn load_ways(
     osm_buildings: BTreeMap<OsmId, OsmObj>,
-) -> Buildings {
+) -> Vec<GenericWay> {
     // Extract buildings and all nodes
     let osm_building_ways: Vec<Way> = osm_buildings
         .clone()
@@ -208,7 +241,7 @@ pub fn load_buildings(
         .collect();
 
     // Create geometry for buildings
-    let buildings = Buildings(osm_building_ways
+    let ways = osm_building_ways
         .into_iter()
         .map(|obj| {
             let coords: Vec<(f64, f64)> = obj
@@ -223,14 +256,14 @@ pub fn load_buildings(
                 .collect();
             let line_string = geo::LineString::from(coords);
             let polygon = Polygon::new(line_string, vec![]); // Make to confex hull to make centroid
-            Building {
+            GenericWay {
                 polygon,
                 tags: obj.tags,
             }
         })
-        .collect());
+        .collect();
 
-    buildings
+    ways
 }
 
 pub fn load_housenumbers(
