@@ -6,7 +6,7 @@
 mod config;
 pub mod geometry;
 mod parser;
-mod pbf;
+pub mod pbf;
 
 use osmpbfreader::OsmPbfReader;
 use pbf::{
