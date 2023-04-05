@@ -6,7 +6,7 @@
 mod config;
 pub mod geometry;
 mod parser;
-pub mod pbf;
+mod pbf;
 
 use osmpbfreader::OsmPbfReader;
 use pbf::{
@@ -17,6 +17,7 @@ use std::fmt::Display;
 use std::fs::File;
 
 pub use crate::config::Config;
+pub use crate::pbf::{Building, GenericGeometry};
 
 #[derive(Debug)]
 pub enum Error {
