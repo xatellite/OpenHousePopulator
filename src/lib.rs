@@ -37,8 +37,8 @@ impl Display for Error {
 impl std::error::Error for Error {}
 
 /// Calculates the population of houses in a given pbf
-pub fn populate_houses(
-    pbf: &mut OsmPbfReader<File>,
+pub fn populate_houses<T: std::io::Read + std::io::Seek>(
+    pbf: &mut OsmPbfReader<T>,
     inhabitants: &Option<u64>,
     centroid: bool,
     config: &Config,
