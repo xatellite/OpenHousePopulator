@@ -17,6 +17,7 @@ impl Config {
     }
 }
 
+#[derive(Default)]
 pub struct ConfigBuilder {
     reroll_threshold: u64,
     reroll_probability: i32,
@@ -34,7 +35,7 @@ impl ConfigBuilder {
         ConfigBuilder {
             reroll_threshold: 90,
             reroll_probability: 2,
-            level_factor: 2,
+            level_factor: 1,
             housenumber_factor: 3,
             exclude_landuse: vec![
                 "allotments".to_string(),

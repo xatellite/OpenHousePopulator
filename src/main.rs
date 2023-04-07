@@ -75,7 +75,7 @@ fn main() {
             let temp_file = temp_directory.join(file_name);
 
             let mut file = File::create(temp_file).unwrap();
-            write!(file, "{}", geojson).unwrap();
+            write!(file, "{geojson}").unwrap();
         }
         None => {}
     }

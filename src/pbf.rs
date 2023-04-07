@@ -30,7 +30,7 @@ pub struct GenericWay {
 
 impl GenericWay {
     /// Gets the number of house numbers in the area
-    fn calculate_house_number_count(&self, house_number_points: &Vec<HouseNumberPoint>) -> usize {
+    fn calculate_house_number_count(&self, house_number_points: &[HouseNumberPoint]) -> usize {
         // Count house numbers of way (tags)
         let mut house_numbers = self
             .tags
@@ -98,7 +98,7 @@ impl GenericWay {
                 })
                 .unwrap()
                 .floor() as usize;
-            flat_count = flat_count * levels;
+            flat_count = flat_count * levels * config.level_factor;
         }
 
         flat_count
@@ -107,7 +107,7 @@ impl GenericWay {
     /// Estimates number of flats inside building
     pub fn calculate_building_metrics(
         &self,
-        house_number_points: &Vec<HouseNumberPoint>,
+        house_number_points: &[HouseNumberPoint],
         config: &Config,
     ) -> Building {
         let house_number_count = self.calculate_house_number_count(house_number_points);
@@ -188,8 +188,8 @@ impl Buildings {
             let mut building = building;
             let flat_count = building.flats;
             let mut population: u64 = 0;
-            for flat_index in flat_offset..(flat_offset + flat_count) {
-                population += flat_inhabitants[flat_index as usize];
+            for flat_inhabitant_count in flat_inhabitants.iter().skip(flat_offset).take(flat_count) {
+                population += flat_inhabitant_count;
             }
             flat_offset += flat_count;
             building.pop += population;
@@ -218,16 +218,12 @@ impl Buildings {
         self.0.iter()
     }
 
-    pub(crate) fn exclude_in(mut self, area: &Vec<GenericWay>) -> Self {
-        self.0 = self
-            .0
-            .into_iter()
-            .filter(|building| {
-                !area
-                    .into_iter()
-                    .any(|area| area.contains(&building.geometry))
-            })
-            .collect();
+    pub(crate) fn exclude_in(mut self, area: &[GenericWay]) -> Self {
+        self.0.retain(|building| {
+           !area
+            .iter()
+            .any(|area| area.contains(&building.geometry))
+        });
         self
     }
 
@@ -317,7 +313,7 @@ pub(crate) fn load_ways(osm_buildings: BTreeMap<OsmId, OsmObj>) -> Vec<GenericWa
         .collect();
 
     // Create geometry for buildings
-    let ways = osm_building_ways
+    osm_building_ways
         .into_iter()
         .map(|obj| {
             let coords: Vec<(f64, f64)> = obj
@@ -337,9 +333,7 @@ pub(crate) fn load_ways(osm_buildings: BTreeMap<OsmId, OsmObj>) -> Vec<GenericWa
                 tags: obj.tags,
             }
         })
-        .collect();
-
-    ways
+        .collect()
 }
 
 pub(crate) fn load_housenumbers(
@@ -354,7 +348,7 @@ pub(crate) fn load_housenumbers(
         .map(|node| (node.id, node))
         .collect(); // TODO: How to get rid of this map function?
 
-    let housenumbers: Vec<HouseNumberPoint> = osm_housenumber_nodes
+    osm_housenumber_nodes
         .values()
         .map(|obj| {
             let point = Point::new(
@@ -364,7 +358,5 @@ pub(crate) fn load_housenumbers(
             let text = obj.tags["addr:housenumber"].to_string();
             HouseNumberPoint { point, text }
         })
-        .collect();
-
-    housenumbers
+        .collect()
 }

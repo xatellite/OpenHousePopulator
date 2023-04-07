@@ -31,9 +31,9 @@ impl HouseNumber {
 impl Display for HouseNumber {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            HouseNumber::Single(hn) => write!(f, "{}", hn),
-            HouseNumber::Subdivided(sdv) => write!(f, "{}", sdv),
-            HouseNumber::Range(hn1, hn2) => write!(f, "{}-{}", hn1, hn2),
+            HouseNumber::Single(hn) => write!(f, "{hn}"),
+            HouseNumber::Subdivided(sdv) => write!(f, "{sdv}"),
+            HouseNumber::Range(hn1, hn2) => write!(f, "{hn1}-{hn2}"),
         }
     }
 }
@@ -113,9 +113,9 @@ impl<'a> Display for ParseError<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ParseError::NotFullyConsumedError(input, rest) => {
-                write!(f, "Parsing failed for string {}, with rest {}", input, rest)
+                write!(f, "Parsing failed for string {input}, with rest {rest}")
             }
-            ParseError::NomError(err) => write!(f, "Parsing failed with NomError: {}", err),
+            ParseError::NomError(err) => write!(f, "Parsing failed with NomError: {err}"),
         }
     }
 }

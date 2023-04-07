@@ -1,6 +1,6 @@
 reroll_threshold = 90
 reroll_probability = 2
-level_factor = 2
+level_factor = 1
 housenumber_factor = 2
 exclude_landuse = ["allotments", "commercial", "industrial", "military", "retail"]
 exclude_tags = ["amenity", "leisure"]
