@@ -8,13 +8,13 @@ pub mod geometry;
 mod parser;
 mod pbf;
 
-use osmpbfreader::OsmPbfReader;
+use osmpbfreader::{OsmId, OsmObj};
 use pbf::{
     is_building, is_exclude_area, is_housenumber_node, load_housenumbers, load_ways, Buildings,
 };
 
+use std::collections::BTreeMap;
 use std::fmt::Display;
-use std::fs::File;
 
 pub use crate::config::Config;
 pub use crate::pbf::{Building, GenericGeometry};
@@ -37,19 +37,19 @@ impl Display for Error {
 impl std::error::Error for Error {}
 
 /// Calculates the population of houses in a given pbf
-pub fn populate_houses<T: std::io::Read + std::io::Seek>(
-    pbf: &mut OsmPbfReader<T>,
+pub fn populate_houses(
+    pbf: BTreeMap<OsmId, OsmObj>,
     inhabitants: &Option<u64>,
     centroid: bool,
     config: &Config,
 ) -> Result<Buildings, Error> {
     // Retrieve objects from pbf
     println!("Loading objects from pbf...");
-    let osm_buildings = pbf.get_objs_and_deps(is_building).unwrap();
-    let osm_housenumbers = pbf.get_objs_and_deps(is_housenumber_node).unwrap();
     let osm_exclude_areas = pbf
-        .get_objs_and_deps(|obj| is_exclude_area(obj, config))
-        .unwrap();
+        .iter().filter(|(_, obj)| is_exclude_area(obj, config)).map(|(k,v)|(k.clone(),v.clone())).collect();
+    let osm_buildings = pbf.iter().filter(|(_,obj)| is_building(obj)).map(|(k,v)|(k.clone(),v.clone())).collect();
+    let osm_housenumbers = pbf.into_iter().filter(|(_,obj)| is_housenumber_node(obj)).collect();
+    
 
     println!("Loading ways...");
     let building_ways = load_ways(osm_buildings);

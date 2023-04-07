@@ -56,7 +56,7 @@ fn main() {
             let r = std::fs::File::open(file).map_err(Error::IOError).unwrap();
             let mut pbf = osmpbfreader::OsmPbfReader::new(r);
             let buildings =
-                populate_houses(&mut pbf, inhabitants, *centroid, &populator_config).unwrap();
+                populate_houses(pbf.get_objs_and_deps(|_| true).unwrap(), inhabitants, *centroid, &populator_config).unwrap();
             println!(
                 "Total Population: {}",
                 buildings.0.iter().map(|building| building.pop).sum::<u64>()
