@@ -66,7 +66,7 @@ impl GenericWay {
         {
             return 1;
         }
-        
+
         // Otherwise estimate flat count by building type
         let mut flat_count: usize = 0;
         if config
@@ -132,7 +132,23 @@ pub struct HouseNumberPoint {
     text: String,
 }
 
-pub struct Buildings(pub Vec<Building>);
+pub struct Buildings(pub(crate) Vec<Building>);
+
+impl IntoIterator for Buildings {
+    type Item = Building;
+
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+impl FromIterator<Building> for Buildings {
+    fn from_iter<T: IntoIterator<Item = Building>>(iter: T) -> Self {
+        Buildings(iter.into_iter().collect())
+    }
+}
 
 impl From<(Vec<GenericWay>, &Vec<HouseNumberPoint>, &Config)> for Buildings {
     fn from(item: (Vec<GenericWay>, &Vec<HouseNumberPoint>, &Config)) -> Self {
@@ -192,6 +208,14 @@ impl Buildings {
                 .map(|p| (p as u64) + 1)
                 .sum();
         })
+    }
+
+    pub fn into_inner(self) -> Vec<Building> {
+        self.0
+    }
+
+    pub fn iter(&self) -> core::slice::Iter<'_, Building> {
+        self.0.iter()
     }
 
     pub(crate) fn exclude_in(mut self, area: &Vec<GenericWay>) -> Self {

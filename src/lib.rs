@@ -8,12 +8,11 @@ pub mod geometry;
 mod parser;
 mod pbf;
 
-use osmpbfreader::{OsmId, OsmObj};
+use osmpbfreader::OsmPbfReader;
 use pbf::{
     is_building, is_exclude_area, is_housenumber_node, load_housenumbers, load_ways, Buildings,
 };
 
-use std::collections::BTreeMap;
 use std::fmt::Display;
 
 pub use crate::config::Config;
@@ -37,40 +36,34 @@ impl Display for Error {
 impl std::error::Error for Error {}
 
 /// Calculates the population of houses in a given pbf
-pub fn populate_houses(
-    pbf: BTreeMap<OsmId, OsmObj>,
-    inhabitants: &Option<u64>,
+pub fn calculate_buildings<T: std::io::Read + std::io::Seek>(
+    pbf: &mut OsmPbfReader<T>,
     centroid: bool,
     config: &Config,
 ) -> Result<Buildings, Error> {
     // Retrieve objects from pbf
-    println!("Loading objects from pbf...");
+    log::info!("Loading objects from pbf...");
+    let osm_buildings = pbf.get_objs_and_deps(is_building).unwrap();
+    let osm_housenumbers = pbf.get_objs_and_deps(is_housenumber_node).unwrap();
     let osm_exclude_areas = pbf
-        .iter().filter(|(_, obj)| is_exclude_area(obj, config)).map(|(k,v)|(k.clone(),v.clone())).collect();
-    let osm_buildings = pbf.iter().filter(|(_,obj)| is_building(obj)).map(|(k,v)|(k.clone(),v.clone())).collect();
-    let osm_housenumbers = pbf.into_iter().filter(|(_,obj)| is_housenumber_node(obj)).collect();
-    
+        .get_objs_and_deps(|obj| is_exclude_area(obj, config))
+        .unwrap();
 
-    println!("Loading ways...");
+    log::info!("Loading ways...");
     let building_ways = load_ways(osm_buildings);
-    println!("Loading housenumbers...");
+    log::info!("Loading housenumbers...");
     let housenumbers = load_housenumbers(osm_housenumbers);
-    println!("Creating buildings...");
+    log::info!("Creating buildings...");
     let mut buildings = Buildings::from((building_ways, &housenumbers, config));
-    println!("Loading exclude areas...");
+    log::info!("Loading exclude areas...");
     let areas = load_ways(osm_exclude_areas);
     if centroid {
-        println!("Calculating centroids...");
+        log::info!("Calculating centroids...");
         buildings.centroid();
     }
-    println!("Exclude areas...");
+    log::info!("Exclude areas...");
     buildings = buildings.exclude_in(&areas);
-    println!("Distributing population...");
-
-    match inhabitants {
-        Some(inhabitants) => buildings.distribute_population(inhabitants.clone(), config),
-        None => buildings.estimate_population(),
-    }
+    log::info!("Distributing population...");
 
     Ok(buildings)
 }

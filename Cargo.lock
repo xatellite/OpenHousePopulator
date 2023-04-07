@@ -988,6 +988,7 @@ dependencies = [
  "geojson",
  "handlebars",
  "itertools",
+ "log",
  "nom",
  "osmpbfreader",
  "rand",

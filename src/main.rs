@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use clap::{Parser, Subcommand};
 use config::Config;
 use openhousepopulator::geometry::write_polygons_to_geojson;
-use openhousepopulator::{populate_houses, Error};
+use openhousepopulator::{calculate_buildings, Error};
 use std::io::Write;
 
 /// Simple program to greet a person
@@ -55,21 +55,27 @@ fn main() {
             let file = std::path::Path::new(file_string);
             let r = std::fs::File::open(file).map_err(Error::IOError).unwrap();
             let mut pbf = osmpbfreader::OsmPbfReader::new(r);
-            let buildings =
-                populate_houses(pbf.get_objs_and_deps(|_| true).unwrap(), inhabitants, *centroid, &populator_config).unwrap();
+            let mut buildings =
+                calculate_buildings(&mut pbf, *centroid, &populator_config).unwrap();
+            match inhabitants {
+                Some(inhabitants) => {
+                    buildings.distribute_population(*inhabitants, &populator_config)
+                }
+                None => buildings.estimate_population(),
+            }
             println!(
                 "Total Population: {}",
-                buildings.0.iter().map(|building| building.pop).sum::<u64>()
+                buildings.iter().map(|building| building.pop).sum::<u64>()
             );
-            let geojson = write_polygons_to_geojson(&buildings.0);
+            let geojson = write_polygons_to_geojson(&buildings.into_inner());
 
             // Create a temporary file.
             let temp_directory = PathBuf::from("./out/");
             let file_name = "Test.geojson";
-            let temp_file = temp_directory.join(&file_name);
+            let temp_file = temp_directory.join(file_name);
 
             let mut file = File::create(temp_file).unwrap();
-            write!(file, "{}", geojson.to_string()).unwrap();
+            write!(file, "{}", geojson).unwrap();
         }
         None => {}
     }
