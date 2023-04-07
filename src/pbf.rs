@@ -17,7 +17,7 @@ use std::fmt::Display;
 use crate::config::Config;
 use crate::parser::housenumber::HouseNumberList;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum GenericGeometry {
     GenericPolygon(Polygon),
     GenericPoint(Point),
@@ -235,7 +235,7 @@ impl Buildings {
 }
 
 /// A building is a area or point with information about estimated flats and population
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Building {
     pub geometry: GenericGeometry,
     pub flats: usize,
