@@ -9,14 +9,12 @@ mod parser;
 mod pbf;
 
 use osmpbfreader::OsmPbfReader;
-use pbf::{
-    is_building, is_exclude_area, is_housenumber_node, load_housenumbers, load_ways, Buildings,
-};
+use pbf::{is_building, is_exclude_area, is_housenumber_node, load_housenumbers, load_ways};
 
 use std::fmt::Display;
 
 pub use crate::config::Config;
-pub use crate::pbf::{Building, GenericGeometry};
+pub use crate::pbf::{Building, Buildings, GenericGeometry};
 
 #[derive(Debug)]
 pub enum Error {

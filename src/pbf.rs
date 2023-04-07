@@ -188,7 +188,8 @@ impl Buildings {
             let mut building = building;
             let flat_count = building.flats;
             let mut population: u64 = 0;
-            for flat_inhabitant_count in flat_inhabitants.iter().skip(flat_offset).take(flat_count) {
+            for flat_inhabitant_count in flat_inhabitants.iter().skip(flat_offset).take(flat_count)
+            {
                 population += flat_inhabitant_count;
             }
             flat_offset += flat_count;
@@ -219,11 +220,8 @@ impl Buildings {
     }
 
     pub(crate) fn exclude_in(mut self, area: &[GenericWay]) -> Self {
-        self.0.retain(|building| {
-           !area
-            .iter()
-            .any(|area| area.contains(&building.geometry))
-        });
+        self.0
+            .retain(|building| !area.iter().any(|area| area.contains(&building.geometry)));
         self
     }
 
