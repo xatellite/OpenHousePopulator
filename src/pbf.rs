@@ -10,6 +10,8 @@ use osmpbfreader::Tags;
 use osmpbfreader::Way;
 use rand::prelude::Distribution;
 use rand::Rng;
+use serde::Deserialize;
+use serde::Serialize;
 use statrs::distribution::Categorical;
 use std::collections::BTreeMap;
 use std::fmt::Display;
@@ -17,7 +19,7 @@ use std::fmt::Display;
 use crate::config::Config;
 use crate::parser::housenumber::HouseNumberList;
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub enum GenericGeometry {
     GenericPolygon(Polygon),
     GenericPoint(Point),
@@ -132,6 +134,7 @@ pub struct HouseNumberPoint {
     text: String,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Buildings(pub(crate) Vec<Building>);
 
 impl IntoIterator for Buildings {
@@ -233,7 +236,7 @@ impl Buildings {
 }
 
 /// A building is a area or point with information about estimated flats and population
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Building {
     pub geometry: GenericGeometry,
     pub flats: usize,

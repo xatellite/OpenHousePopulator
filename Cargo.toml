@@ -1,6 +1,6 @@
 [package]
 name = "openhousepopulator"
-version = "0.2.2"
+version = "0.2.3"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -10,7 +10,7 @@ clap = { version = "4.1.4", features = ["derive"] }
 config = "0.13.3"
 either = "1.8.1"
 futures = "0.3.21"
-geo = "0.22.1"
+geo = { version = "0.24.1", features = ["use-serde"] }
 geo-types = "0.7.6"
 geojson = "0.23.0"
 handlebars = "4.3.3"
