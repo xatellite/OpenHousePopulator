@@ -91,14 +91,7 @@ impl GenericWay {
         if self.tags.contains_key("building:levels") {
             let levels = self.tags["building:levels"]
                 .parse::<f32>()
-                .map_err(|err| {
-                    println!(
-                        "Error: {:?} on value {:?}",
-                        err, self.tags["building:levels"]
-                    );
-                    0
-                })
-                .unwrap()
+                .unwrap_or(0.0)
                 .floor() as usize;
             flat_count = flat_count * levels * config.level_factor;
         }
