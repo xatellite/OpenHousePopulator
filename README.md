@@ -52,6 +52,8 @@ cd bin
 ./OpenHousePopulator populate -f "./res/Gmunden.osm.pbf" -i 7602 --centroid
 ```
 
+Where `-i` (mandatory) describes the number of inhabitants in the area of the `.osm.pbf` file. The `--centroid` (optional) parameter puts the data in a GeoJSON `Point` geometry instead into the buildings geometry. 
+
 Output:
 A GeoJson with all buildings including the additional fields 'pop' (population), 'flats' (household estimation)
 
