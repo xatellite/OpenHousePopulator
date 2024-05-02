@@ -181,7 +181,7 @@ impl Buildings {
         // Add population tag to buildings
         let mut flat_offset = 0;
         self.0.iter_mut().for_each(|building| {
-            let mut building = building;
+            let building = building;
             let flat_count = building.flats;
             let mut population: u64 = 0;
             for flat_inhabitant_count in flat_inhabitants.iter().skip(flat_offset).take(flat_count)
