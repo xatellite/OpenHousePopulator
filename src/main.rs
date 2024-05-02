@@ -1,3 +1,4 @@
+use std::fs;
 use std::fs::File;
 use std::path::PathBuf;
 
@@ -71,6 +72,9 @@ fn main() {
 
             // Create a temporary file.
             let temp_directory = PathBuf::from("./out/");
+            if !temp_directory.exists() {
+                fs::create_dir_all(&temp_directory).unwrap();
+            }
             let file_name = "Test.geojson";
             let temp_file = temp_directory.join(file_name);
 
