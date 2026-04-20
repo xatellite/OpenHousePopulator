@@ -241,18 +241,6 @@ impl Buildings {
         self
     }
 
-    /// Keep only buildings whose centroid lies within `area`
-    pub(crate) fn filter_within(mut self, area: &Polygon) -> Self {
-        self.0.retain(|building| {
-            let centroid = match &building.geometry {
-                GenericGeometry::GenericPolygon(p) => p.centroid(),
-                GenericGeometry::GenericPoint(pt) => Some(*pt),
-            };
-            centroid.map_or(false, |c| area.contains(&c))
-        });
-        self
-    }
-
     pub(crate) fn centroid(&mut self) {
         self.0.iter_mut().for_each(|building| {
             building.centroid();

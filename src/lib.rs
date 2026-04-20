@@ -9,6 +9,7 @@ mod parser;
 mod pbf;
 
 use indicatif::{ProgressBar, ProgressStyle};
+use geo::{Centroid, Contains};
 use osmpbfreader::OsmPbfReader;
 use pbf::{
     is_area_relation, is_area_way, is_building, is_exclude_area, is_housenumber_node,
@@ -117,29 +118,56 @@ pub fn calculate_buildings<T: std::io::Read + std::io::Seek>(
         osm_exclude_areas.len()
     ));
 
-    let building_ways = load_ways(osm_buildings);
+    let mut building_ways = load_ways(osm_buildings);
     let housenumbers = load_housenumbers(osm_housenumbers);
-    let mut buildings = Buildings::from((building_ways, &housenumbers, config));
 
-    if let Some(polygon) = area_polygon {
+    if let Some(ref polygon) = area_polygon {
+        let before = building_ways.len();
         let pb = ProgressBar::new_spinner();
         pb.set_style(spinner_style.clone());
-        pb.set_message("Filtering buildings within area boundary...");
+        pb.set_message("Applying area filter...");
         pb.enable_steady_tick(std::time::Duration::from_millis(100));
-        let before = buildings.iter().count();
-        buildings = buildings.filter_within(&polygon);
+        building_ways.retain(|way| {
+            way.polygon
+                .centroid()
+                .map_or(false, |c| polygon.contains(&c))
+        });
         pb.finish_with_message(format!(
-            "Filtered to {} buildings (from {})",
-            buildings.iter().count(),
-            before
+            "Area filter: {} → {} buildings",
+            before,
+            building_ways.len()
         ));
     }
 
+    let mut buildings = Buildings::from((building_ways, &housenumbers, config));
+
+    let pb = ProgressBar::new_spinner();
+    pb.set_style(spinner_style.clone());
+    pb.set_message("Loading exclude area geometries...");
+    pb.enable_steady_tick(std::time::Duration::from_millis(100));
     let areas = load_ways(osm_exclude_areas);
+    pb.finish_with_message(format!("Loaded {} exclude area geometries", areas.len()));
+
     if centroid {
+        let pb = ProgressBar::new_spinner();
+        pb.set_style(spinner_style.clone());
+        pb.set_message("Converting building polygons to centroids...");
+        pb.enable_steady_tick(std::time::Duration::from_millis(100));
         buildings.centroid();
+        pb.finish_with_message("Converted building polygons to centroids");
     }
+
+    let pb = ProgressBar::new_spinner();
+    pb.set_style(spinner_style.clone());
+    pb.set_message("Applying exclude area filter...");
+    pb.enable_steady_tick(std::time::Duration::from_millis(100));
+    let before = buildings.0.len();
     buildings = buildings.exclude_in(&areas);
+    pb.finish_with_message(format!(
+        "Exclude filter: {} → {} buildings",
+        before,
+        buildings.0.len()
+    ));
 
     Ok(buildings)
 }
