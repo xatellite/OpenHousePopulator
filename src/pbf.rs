@@ -42,6 +42,7 @@ pub enum GenericGeometry {
 }
 
 pub struct GenericWay {
+    pub id: i64,
     pub polygon: Polygon,
     pub tags: Tags,
 }
@@ -124,6 +125,8 @@ impl GenericWay {
         let house_number_count = self.calculate_house_number_count(house_number_points);
         let flat_count = self.calculate_flat_count(house_number_count, config);
         Building {
+            osm_id: self.id,
+            building_class: self.tags.get("building").map(|s| s.to_string()).unwrap_or_default(),
             geometry: GenericGeometry::GenericPolygon(self.polygon.clone()),
             flats: flat_count,
             pop: 0,
@@ -252,6 +255,8 @@ impl Buildings {
 /// A building is a area or point with information about estimated flats and population
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Building {
+    pub osm_id: i64,
+    pub building_class: String,
     pub geometry: GenericGeometry,
     pub flats: usize,
     pub pop: u64,
@@ -344,6 +349,7 @@ pub(crate) fn load_ways(osm_buildings: BTreeMap<OsmId, OsmObj>) -> Vec<GenericWa
             let line_string = geo::LineString::from(coords);
             let polygon = Polygon::new(line_string, vec![]); // Make to confex hull to make centroid
             GenericWay {
+                id: obj.id.0,
                 polygon,
                 tags: obj.tags,
             }
