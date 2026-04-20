@@ -2,10 +2,12 @@ use geo::Centroid;
 use geo::Contains;
 use geo::Point;
 use geo::Polygon;
+use indicatif::{ProgressBar, ProgressIterator, ProgressStyle};
 use osmpbfreader::Node;
 use osmpbfreader::NodeId;
 use osmpbfreader::OsmId;
 use osmpbfreader::OsmObj;
+use osmpbfreader::Relation;
 use osmpbfreader::Tags;
 use osmpbfreader::Way;
 use rand::prelude::Distribution;
@@ -15,6 +17,19 @@ use serde::Serialize;
 use statrs::distribution::Categorical;
 use std::collections::BTreeMap;
 use std::fmt::Display;
+
+fn progress_bar(len: u64, msg: &'static str) -> ProgressBar {
+    let pb = ProgressBar::new(len);
+    pb.set_message(msg);
+    pb.set_style(
+        ProgressStyle::with_template(
+            "{msg}: [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} ({eta})",
+        )
+        .unwrap()
+        .progress_chars("=> "),
+    );
+    pb
+}
 
 use crate::config::Config;
 use crate::parser::housenumber::HouseNumberList;
@@ -148,9 +163,11 @@ impl FromIterator<Building> for Buildings {
 
 impl From<(Vec<GenericWay>, &Vec<HouseNumberPoint>, &Config)> for Buildings {
     fn from(item: (Vec<GenericWay>, &Vec<HouseNumberPoint>, &Config)) -> Self {
+        let pb = progress_bar(item.0.len() as u64, "Processing buildings");
         Buildings(
             item.0
                 .into_iter()
+                .progress_with(pb)
                 .map(|way| Building::from((way, item.1, item.2)))
                 .collect(),
         )
@@ -166,6 +183,7 @@ impl Buildings {
         // Distribute population
         let mut flat_inhabitants: Vec<u64> = vec![0; total_flat_count];
         let mut inhabitants_to_distribute = inhabitants_total;
+        let pb = progress_bar(inhabitants_total, "Distributing population");
         while inhabitants_to_distribute > 0 {
             let flat_index = rand::thread_rng().gen_range(0..total_flat_count - 1);
             if flat_inhabitants[flat_index] > config.reroll_threshold
@@ -176,7 +194,9 @@ impl Buildings {
             }
             flat_inhabitants[flat_index] += 1;
             inhabitants_to_distribute -= 1;
+            pb.inc(1);
         }
+        pb.finish_and_clear();
 
         // Add population tag to buildings
         let mut flat_offset = 0;
@@ -218,6 +238,18 @@ impl Buildings {
     pub(crate) fn exclude_in(mut self, area: &[GenericWay]) -> Self {
         self.0
             .retain(|building| !area.iter().any(|area| area.contains(&building.geometry)));
+        self
+    }
+
+    /// Keep only buildings whose centroid lies within `area`
+    pub(crate) fn filter_within(mut self, area: &Polygon) -> Self {
+        self.0.retain(|building| {
+            let centroid = match &building.geometry {
+                GenericGeometry::GenericPolygon(p) => p.centroid(),
+                GenericGeometry::GenericPoint(pt) => Some(*pt),
+            };
+            centroid.map_or(false, |c| area.contains(&c))
+        });
         self
     }
 
@@ -328,6 +360,131 @@ pub(crate) fn load_ways(osm_buildings: BTreeMap<OsmId, OsmObj>) -> Vec<GenericWa
             }
         })
         .collect()
+}
+
+/// Identifies which OSM object defines the area boundary to filter buildings by
+#[derive(Debug, Clone)]
+pub enum AreaId {
+    Way(i64),
+    Relation(i64),
+}
+
+pub(crate) fn is_area_way(obj: &OsmObj, way_id: i64) -> bool {
+    matches!(obj, OsmObj::Way(w) if w.id.0 == way_id)
+}
+
+pub(crate) fn is_area_relation(obj: &OsmObj, relation_id: i64) -> bool {
+    matches!(obj, OsmObj::Relation(r) if r.id.0 == relation_id)
+}
+
+/// Build a polygon from a single OSM way (used as area boundary)
+pub(crate) fn load_area_way_polygon(
+    objs: &BTreeMap<OsmId, OsmObj>,
+    way_id: i64,
+) -> Option<Polygon> {
+    let way = objs.values().find_map(|obj| match obj {
+        OsmObj::Way(w) if w.id.0 == way_id => Some(w),
+        _ => None,
+    })?;
+    let nodes = collect_nodes(objs);
+    way_nodes_to_polygon(&way.nodes, &nodes)
+}
+
+/// Build a polygon from an OSM relation (multipolygon boundary)
+pub(crate) fn load_area_relation_polygon(
+    objs: &BTreeMap<OsmId, OsmObj>,
+    relation_id: i64,
+) -> Option<Polygon> {
+    let relation: &Relation = objs.values().find_map(|obj| match obj {
+        OsmObj::Relation(r) if r.id.0 == relation_id => Some(r),
+        _ => None,
+    })?;
+
+    let outer_way_ids: Vec<i64> = relation
+        .refs
+        .iter()
+        .filter(|r| r.role == "outer" || r.role.is_empty())
+        .filter_map(|r| match r.member {
+            OsmId::Way(wid) => Some(wid.0),
+            _ => None,
+        })
+        .collect();
+
+    let nodes = collect_nodes(objs);
+
+    let ways_node_ids: Vec<Vec<NodeId>> = outer_way_ids
+        .iter()
+        .filter_map(|wid| {
+            objs.values().find_map(|obj| match obj {
+                OsmObj::Way(w) if w.id.0 == *wid => Some(w.nodes.clone()),
+                _ => None,
+            })
+        })
+        .collect();
+
+    if ways_node_ids.is_empty() {
+        return None;
+    }
+
+    let stitched = stitch_ways(ways_node_ids);
+    way_nodes_to_polygon(&stitched, &nodes)
+}
+
+fn collect_nodes(objs: &BTreeMap<OsmId, OsmObj>) -> BTreeMap<NodeId, &Node> {
+    objs.values()
+        .filter_map(|obj| match obj {
+            OsmObj::Node(n) => Some((n.id, n)),
+            _ => None,
+        })
+        .collect()
+}
+
+fn way_nodes_to_polygon(node_ids: &[NodeId], nodes: &BTreeMap<NodeId, &Node>) -> Option<Polygon> {
+    let coords: Vec<(f64, f64)> = node_ids
+        .iter()
+        .filter_map(|nid| nodes.get(nid))
+        .map(|n| {
+            (
+                n.decimicro_lon as f64 / 10_000_000.0,
+                n.decimicro_lat as f64 / 10_000_000.0,
+            )
+        })
+        .collect();
+    if coords.len() < 3 {
+        return None;
+    }
+    Some(Polygon::new(geo::LineString::from(coords), vec![]))
+}
+
+/// Stitch a list of ordered node-ID sequences into one closed ring
+fn stitch_ways(ways: Vec<Vec<NodeId>>) -> Vec<NodeId> {
+    if ways.is_empty() {
+        return vec![];
+    }
+    if ways.len() == 1 {
+        return ways.into_iter().next().unwrap();
+    }
+
+    let mut result: Vec<NodeId> = ways[0].clone();
+    let mut remaining: Vec<Vec<NodeId>> = ways[1..].to_vec();
+
+    while !remaining.is_empty() {
+        let last = *result.last().unwrap();
+        if let Some(pos) = remaining
+            .iter()
+            .position(|w| w.first() == Some(&last) || w.last() == Some(&last))
+        {
+            let mut next = remaining.remove(pos);
+            if next.last() == Some(&last) {
+                next.reverse();
+            }
+            result.extend_from_slice(&next[1..]);
+        } else {
+            break;
+        }
+    }
+
+    result
 }
 
 pub(crate) fn load_housenumbers(

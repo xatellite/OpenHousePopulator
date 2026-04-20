@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use clap::{Parser, Subcommand};
 use config::Config;
 use openhousepopulator::geometry::write_polygons_to_geojson;
-use openhousepopulator::{calculate_buildings, Error};
+use openhousepopulator::{calculate_buildings, AreaId, Error};
 use std::io::Write;
 
 /// Simple program to greet a person
@@ -31,6 +31,14 @@ enum Commands {
         /// if result should be returned using centroids
         #[arg(short, long)]
         centroid: bool,
+
+        /// OSM relation ID to restrict calculation to (e.g. 123456)
+        #[arg(long, conflicts_with = "way_id")]
+        relation_id: Option<i64>,
+
+        /// OSM way ID to restrict calculation to (e.g. 123456)
+        #[arg(long, conflicts_with = "relation_id")]
+        way_id: Option<i64>,
     },
 }
 
@@ -52,12 +60,20 @@ fn main() {
             file_string,
             inhabitants,
             centroid,
+            relation_id,
+            way_id,
         }) => {
+            let area_filter = match (relation_id, way_id) {
+                (Some(id), _) => Some(AreaId::Relation(*id)),
+                (_, Some(id)) => Some(AreaId::Way(*id)),
+                _ => None,
+            };
+
             let file = std::path::Path::new(file_string);
             let r = std::fs::File::open(file).map_err(Error::IOError).unwrap();
             let mut pbf = osmpbfreader::OsmPbfReader::new(r);
             let mut buildings =
-                calculate_buildings(&mut pbf, *centroid, &populator_config).unwrap();
+                calculate_buildings(&mut pbf, *centroid, &populator_config, area_filter).unwrap();
             match inhabitants {
                 Some(inhabitants) => {
                     buildings.distribute_population(*inhabitants, &populator_config)
