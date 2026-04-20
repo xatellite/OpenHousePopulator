@@ -1,5 +1,6 @@
 use geo::Centroid;
 use geo::Contains;
+use geo::Intersects;
 use geo::Point;
 use geo::Polygon;
 use indicatif::{ProgressBar, ProgressIterator, ProgressStyle};
@@ -58,7 +59,7 @@ impl GenericWay {
         // Count house numbers beeing positioned inside area (of way)
         house_number_points
             .iter()
-            .filter(|house_number| self.polygon.contains(&house_number.point))
+            .filter(|house_number| self.polygon.intersects(&house_number.point))
             .for_each(|house_number| {
                 house_numbers.merge(
                     HouseNumberList::try_from(house_number.text.as_str()).unwrap_or_default(),
@@ -491,8 +492,8 @@ pub(crate) fn load_housenumbers(
         .values()
         .map(|obj| {
             let point = Point::new(
-                obj.decimicro_lat as f64 / 10000000.,
                 obj.decimicro_lon as f64 / 10000000.,
+                obj.decimicro_lat as f64 / 10000000.,
             );
             let text = obj.tags["addr:housenumber"].to_string();
             HouseNumberPoint { point, text }
