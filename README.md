@@ -59,7 +59,7 @@ A GeoJson with all buildings including the additional fields 'pop' (population),
 
 ## Configuration
 
-You can configure the following parameters in the `config.json` file:
+You can configure the following parameters in the `settings.toml` file:
 
 - reroll_threshold: The minimum population count to start rerolling (populate next building).
 - reroll_probability: The probability to reroll a building (over threshold).
