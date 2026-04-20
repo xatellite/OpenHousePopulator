@@ -10,6 +10,8 @@ pub fn write_polygons_to_geojson(buildings: &Vec<Building>) -> GeoJson {
 
     for building in buildings {
         let mut tags_map = serde_json::Map::new();
+        tags_map.insert("osm_id".to_string(), building.osm_id.into());
+        tags_map.insert("building".to_string(), building.building_class.clone().into());
         tags_map.insert("flats".to_string(), building.flats.into());
         tags_map.insert("pop".to_string(), building.pop.into());
 
